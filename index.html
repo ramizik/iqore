@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iQore AI Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="chat-container">
+        <!-- Header with AI Avatar and Info -->
+        <header class="chat-header">
+            <div class="ai-avatar">
+                <img src="https://images.pexels.com/photos/8386440/pexels-photo-8386440.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop" alt="AI Avatar" class="avatar-image">
+            </div>
+            <div class="ai-info">
+                <h1 class="ai-title">iQore AI</h1>
+                <p class="ai-subtitle">Get Support & Ask Questions About iQore and our work</p>
+                <p class="ai-description">Lorem ipsum</p>
+            </div>
+        </header>
+
+        <!-- Chat Messages Area -->
+        <main class="chat-main">
+            <div class="messages-container" id="messagesContainer">
+                <!-- Initial AI Message -->
+                <div class="message-group ai-message">
+                    <div class="message-avatar">
+                        <div class="avatar ai-avatar-small"></div>
+                    </div>
+                    <div class="message-bubble">
+                        <p>Hello! I'm EchoLens.AI, your emotion and sound aware assistant. How can I help you today?</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Input Area -->
+        <footer class="chat-footer">
+            <div class="input-container">
+                <input 
+                    type="text" 
+                    id="messageInput" 
+                    placeholder="Type your message here..."
+                    onkeydown="handleKeyDown(event)"
+                >
+                <button class="send-button" id="sendButton" onclick="sendMessage()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
