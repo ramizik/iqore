@@ -146,8 +146,9 @@ function scrollToBottom() {
 // Function to connect to your AWS Lambda function
 async function callOpenAIAgent(message) {
     try {
-        // Replace 'YOUR_AWS_LAMBDA_ENDPOINT' with your actual Lambda function URL
-        const response = await fetch('YOUR_AWS_LAMBDA_ENDPOINT', {
+        // Replace with your actual AWS Lambda API Gateway endpoint
+        // Format: https://your-api-id.execute-api.YOUR-REGION.amazonaws.com/prod/chat
+        const response = await fetch('https://fg9paa2iz5.execute-api.us-west-1.amazonaws.com/default/myChatbot', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -169,12 +170,9 @@ async function callOpenAIAgent(message) {
         
         const data = await response.json();
         
-        // Adjust this based on your Lambda function's response structure
-        // Common structures might be:
-        // return data.response;
-        // return data.message;
-        // return data.body.response;
-        return data.response || data.message || "I received your message but couldn't generate a response.";
+        // Handle the response from your Lambda function
+        // Adjust based on your OpenAI Agentic SDK Lambda response structure
+        return data.reply || data.response || data.message || "I received your message but couldn't generate a response.";
         
     } catch (error) {
         console.error('Error calling OpenAI agent:', error);
