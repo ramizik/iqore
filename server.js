@@ -2,7 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = 8000;
+const PORT = 3000;
 
 // MIME types for different file extensions
 const mimeTypes = {
