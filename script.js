@@ -178,6 +178,8 @@ async function callOpenAIAgent(message, agentType = 'general') {
             throw new Error(`Unknown agent type: ${agentType}`);
         }
 
+        console.log(`Calling agent: ${agent.name} with session: ${sessionId}`);
+
         const response = await fetch(agent.endpoint, {
             method: 'POST',
             headers: {
@@ -189,24 +191,32 @@ async function callOpenAIAgent(message, agentType = 'general') {
                 message: message,
                 timestamp: new Date().toISOString(),
                 sessionId: sessionId,
-                agentType: agentType,
+                // Remove agentType since Lambda doesn't use it
                 userId: 'anonymous_user', // You can implement user identification later
             })
         });
         
+        console.log(`Response status: ${response.status}`);
+        
         if (!response.ok) {
             // Get error details from response if available
+            let errorDetails = null;
             let errorMessage = `HTTP error! status: ${response.status}`;
+            
             try {
-                const errorData = await response.json();
-                errorMessage = errorData.error || errorData.message || errorMessage;
+                errorDetails = await response.json();
+                errorMessage = errorDetails.error || errorDetails.message || errorMessage;
+                console.error('Detailed error response:', errorDetails);
             } catch (e) {
+                console.error('Could not parse error response:', e);
                 // If we can't parse the error response, use the status message
             }
+            
             throw new Error(errorMessage);
         }
         
         const data = await response.json();
+        console.log('Successful response:', data);
         
         // Handle the response from your Lambda function
         const reply = data.reply || data.response || data.message;
@@ -220,18 +230,30 @@ async function callOpenAIAgent(message, agentType = 'general') {
             console.log('OpenAI API Usage:', data.usage);
         }
         
+        if (data.conversationLength) {
+            console.log('Conversation length:', data.conversationLength);
+        }
+        
         return reply;
         
     } catch (error) {
         console.error('Error calling OpenAI agent:', error);
+        console.error('Error details:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+        });
         
         // Provide user-friendly error messages
         if (error.message.includes('HTTP error! status: 402')) {
             throw new Error("I'm temporarily unavailable due to API limits. Please try again later.");
         } else if (error.message.includes('HTTP error! status: 401')) {
             throw new Error("Authentication issue. Please contact support.");
+        } else if (error.message.includes('HTTP error! status: 429')) {
+            throw new Error("Too many requests. Please wait a moment and try again.");
         } else if (error.message.includes('HTTP error! status: 500')) {
-            throw new Error("I'm experiencing technical difficulties. Please try again in a moment.");
+            // Include more details for 500 errors to help with debugging
+            throw new Error(`I'm experiencing technical difficulties. Please try again in a moment. (${error.message})`);
         } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
             throw new Error("Connection issue. Please check your internet connection and try again.");
         }
