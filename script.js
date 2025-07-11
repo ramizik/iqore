@@ -148,7 +148,7 @@ async function callOpenAIAgent(message) {
     try {
         // Replace with your actual AWS Lambda API Gateway endpoint
         // Format: https://your-api-id.execute-api.YOUR-REGION.amazonaws.com/prod/chat
-        const response = await fetch('https://fg9paa2iz5.execute-api.us-west-1.amazonaws.com/default/myChatbot', {
+        const response = await fetch('https://fg9paa2iz5.execute-api.us-west-1.amazonaws.com/default/chatConvo', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
