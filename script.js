@@ -1,5 +1,6 @@
 // Global variables
 let isTyping = false;
+const AWS_API_URL = 'https://yklxgcoavf.execute-api.us-west-1.amazonaws.com/dev'
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
@@ -43,13 +44,13 @@ function sendMessage() {
     // Show typing indicator and simulate AI response
     showTypingIndicator();
     
-    // Call AWS Lambda function
-    callOpenAIAgent(message).then(response => {
+    // Call AWS Lambda function with current agent
+    callOpenAIAgent(message, currentAgent).then(response => {
         hideTypingIndicator();
         addMessage(response, 'ai');
     }).catch(error => {
         hideTypingIndicator();
-        addMessage("I'm sorry, I'm having trouble connecting right now. Please try again later.", 'ai');
+        addMessage(error.message || "I'm sorry, I'm having trouble connecting right now. Please try again later.", 'ai');
         console.error('Error:', error);
     });
 }
@@ -143,12 +144,41 @@ function scrollToBottom() {
     chatMain.scrollTop = chatMain.scrollHeight;
 }
 
+// Configuration for different agents
+const AGENTS = {
+    'general': {
+        name: 'iQore AI Assistant',
+        endpoint: AWS_API_URL,
+        description: 'General iQore assistant for technology and business questions'
+    },
+    // Future agents can be added here
+    // 'technical': {
+    //     name: 'iQore Technical Expert',
+    //     endpoint: AWS_API_URL + '/technical',
+    //     description: 'Deep technical guidance on iQD/iCD architecture'
+    // },
+    // 'business': {
+    //     name: 'iQore Business Advisor',
+    //     endpoint: AWS_API_URL + '/business',
+    //     description: 'Investment and business strategy guidance'
+    // }
+};
+
+// Current active agent
+let currentAgent = 'general';
+
+// Generate unique session ID
+const sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
 // Function to connect to your AWS Lambda function
-async function callOpenAIAgent(message) {
+async function callOpenAIAgent(message, agentType = 'general') {
     try {
-        // Replace with your actual AWS Lambda API Gateway endpoint
-        // Format: https://your-api-id.execute-api.YOUR-REGION.amazonaws.com/prod/chat
-        const response = await fetch('https://fg9paa2iz5.execute-api.us-west-1.amazonaws.com/default/chatConvo', {
+        const agent = AGENTS[agentType];
+        if (!agent) {
+            throw new Error(`Unknown agent type: ${agentType}`);
+        }
+
+        const response = await fetch(agent.endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -158,24 +188,67 @@ async function callOpenAIAgent(message) {
             body: JSON.stringify({
                 message: message,
                 timestamp: new Date().toISOString(),
-                // Add any other parameters your Lambda function expects:
-                // userId: 'user123',
-                // sessionId: 'session456',
+                sessionId: sessionId,
+                agentType: agentType,
+                userId: 'anonymous_user', // You can implement user identification later
             })
         });
         
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            // Get error details from response if available
+            let errorMessage = `HTTP error! status: ${response.status}`;
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorData.message || errorMessage;
+            } catch (e) {
+                // If we can't parse the error response, use the status message
+            }
+            throw new Error(errorMessage);
         }
         
         const data = await response.json();
         
         // Handle the response from your Lambda function
-        // Adjust based on your OpenAI Agentic SDK Lambda response structure
-        return data.reply || data.response || data.message || "I received your message but couldn't generate a response.";
+        const reply = data.reply || data.response || data.message;
+        
+        if (!reply) {
+            throw new Error("No response content received from the agent");
+        }
+        
+        // Log usage information if available (for debugging)
+        if (data.usage) {
+            console.log('OpenAI API Usage:', data.usage);
+        }
+        
+        return reply;
         
     } catch (error) {
         console.error('Error calling OpenAI agent:', error);
+        
+        // Provide user-friendly error messages
+        if (error.message.includes('HTTP error! status: 402')) {
+            throw new Error("I'm temporarily unavailable due to API limits. Please try again later.");
+        } else if (error.message.includes('HTTP error! status: 401')) {
+            throw new Error("Authentication issue. Please contact support.");
+        } else if (error.message.includes('HTTP error! status: 500')) {
+            throw new Error("I'm experiencing technical difficulties. Please try again in a moment.");
+        } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            throw new Error("Connection issue. Please check your internet connection and try again.");
+        }
+        
         throw error; // Re-throw to be handled in sendMessage()
+    }
+}
+
+// Function to switch between agents (for future use)
+function switchAgent(agentType) {
+    if (AGENTS[agentType]) {
+        currentAgent = agentType;
+        console.log(`Switched to agent: ${AGENTS[agentType].name}`);
+        
+        // You could add UI updates here to show which agent is active
+        // For example: updateAgentIndicator(agentType);
+    } else {
+        console.error(`Unknown agent type: ${agentType}`);
     }
 }
