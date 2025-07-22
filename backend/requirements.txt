@@ -4,9 +4,10 @@ python-multipart==0.0.6
 pydantic==2.5.0
 
 # LangChain dependencies for modern OpenAI integration
-langchain[openai]
+langchain
+langchain-mongodb
 
 # PDF and Database Dependencies
-pymongo==4.6.0
+pymongo==4.6.1
 PyMuPDF==1.23.14
 python-dotenv==1.0.0 
