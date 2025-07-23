@@ -45,7 +45,6 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
-    sources: Optional[List[Dict[str, str]]] = []
     chat_history: List[Dict[str, str]]
 
 class HealthResponse(BaseModel):
@@ -195,7 +194,6 @@ class ChatbotService:
         if not self.qa_chain:
             return {
                 "response": "I'm sorry, but the chatbot service is not properly initialized. Please contact support.",
-                "sources": [],
                 "chat_history": chat_history
             }
         
@@ -214,17 +212,7 @@ class ChatbotService:
             })
             
             response = result["answer"]
-            source_docs = result.get("context", [])  # LCEL chains use "context" instead of "source_documents"
-            
-            # Format sources
-            sources = []
-            for doc in source_docs[:3]:  # Limit to top 3 sources
-                source_info = {
-                    "source": doc.metadata.get("source", "Unknown"),
-                    "chunk_id": str(doc.metadata.get("chunk_id", "N/A")),
-                    "content_preview": doc.page_content[:150] + "..." if len(doc.page_content) > 150 else doc.page_content
-                }
-                sources.append(source_info)
+            # Sources removed as per user request - no longer displayed in frontend
             
             # Update chat history
             updated_history = chat_history.copy()
@@ -236,7 +224,6 @@ class ChatbotService:
             
             return {
                 "response": response,
-                "sources": sources,
                 "chat_history": updated_history
             }
             
@@ -244,7 +231,6 @@ class ChatbotService:
             logger.error(f"Error getting chatbot response: {e}")
             return {
                 "response": "I'm sorry, but I encountered an error while processing your request. Please try again.",
-                "sources": [],
                 "chat_history": chat_history
             }
     
@@ -337,7 +323,6 @@ async def chat_endpoint(request: ChatRequest) -> ChatResponse:
         
         response = ChatResponse(
             response=result["response"],
-            sources=result["sources"],
             chat_history=result["chat_history"]
         )
         
