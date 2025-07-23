@@ -13,6 +13,7 @@ from datetime import datetime
 # LangChain imports for modern OpenAI integration
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_core.prompts import ChatPromptTemplate
 
 # MongoDB Atlas Vector Search and Conversational Chain imports
 from langchain_mongodb import MongoDBAtlasVectorSearch
@@ -262,11 +263,34 @@ class PDFEmbeddingProcessor:
                 openai_api_key=os.getenv('OPENAI_API_KEY')
             )
             
-            # Create conversational retrieval chain
+            system_prompt = """
+            You are a knowledgeable and professional virtual assistant for iQore, a deep-tech company pioneering quantum-classical hybrid compute infrastructure.
+            iQore's core innovation lies in its software-native, platform-agnostic execution layers—iQD (quantum emulator) and iCD (classical compute distribution)—designed to accelerate performance and scalability of enterprise AI and simulation workloads.
+
+            You have access to a curated set of official iQore documents and whitepapers, which you use to answer questions accurately and in detail. When responding, reference the information from these documents when relevant, but do not fabricate answers if the information is not available.
+
+            Your tone is helpful, confident, and persuasive. You offer technical and business insights, and you’re able to support a range of user types—from curious visitors to experienced engineers and decision-makers.
+
+            When appropriate, encourage users to:
+            - Request a product demo
+            - Schedule a follow-up meeting
+            - Learn more about specific use cases
+            - Ask deeper questions about the architecture
+
+            Your goal is to inform, engage, and guide potential customers by showcasing the value of iQore’s solutions, while being honest if something is outside your knowledge.
+            """
+
+
+            prompt_template = ChatPromptTemplate.from_messages([
+                ("system", system_prompt),
+                ("human", "{question}")
+            ])
+
             qa_chain = ConversationalRetrievalChain.from_llm(
                 llm=llm,
                 retriever=retriever,
                 return_source_documents=True,
+                combine_docs_chain_kwargs={"prompt": prompt_template},
                 verbose=False
             )
             
