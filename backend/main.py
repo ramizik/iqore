@@ -211,13 +211,13 @@ class ChatbotService:
     
     def get_document_count(self) -> int:
         """Get the number of documents in the database"""
-        if not self.pdf_chunks_collection:
+        if self.pdf_chunks_collection is None:
             return 0
         return self.pdf_chunks_collection.count_documents({})
     
     def close_connections(self):
         """Close database connections"""
-        if self.mongo_client:
+        if self.mongo_client is not None:
             self.mongo_client.close()
             logger.info("MongoDB connection closed")
 
