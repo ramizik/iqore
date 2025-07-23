@@ -228,11 +228,15 @@ chatbot_service = ChatbotService()
 async def startup_event():
     """Initialize the chatbot service on startup"""
     logger.info("Starting iQore Chatbot Backend...")
-    success = await chatbot_service.initialize()
-    if success:
-        logger.info("✅ Chatbot service initialized successfully")
-    else:
-        logger.warning("⚠️ Chatbot service initialized but no documents found in database")
+    try:
+        success = await chatbot_service.initialize()
+        if success:
+            logger.info("✅ Chatbot service initialized successfully")
+        else:
+            logger.warning("⚠️ Chatbot service initialized but no documents found in database")
+    except Exception as e:
+        logger.error(f"⚠️ Failed to initialize chatbot service: {e}")
+        logger.info("🔄 Server will continue running, but chatbot functionality may be limited")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -243,7 +247,12 @@ async def shutdown_event():
 @app.get("/")
 async def root() -> Dict[str, str]:
     """Root endpoint"""
-    return {"message": "iQore Chatbot Backend is running"}
+    return {
+        "message": "iQore Chatbot Backend is running",
+        "status": "healthy",
+        "version": "1.0.0",
+        "port": str(os.environ.get("PORT", "8080"))
+    }
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
@@ -294,5 +303,20 @@ async def chat_endpoint(request: ChatRequest) -> ChatResponse:
         )
 
 if __name__ == "__main__":
+    # Get port from environment variable (Google Cloud Run provides this)
     port = int(os.environ.get("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port) 
+    
+    # Log startup information
+    logger.info(f"🚀 Starting iQore Chatbot Backend on 0.0.0.0:{port}")
+    logger.info(f"📊 Environment: {os.environ.get('GAE_ENV', 'local')}")
+    logger.info(f"🔧 Port: {port}")
+    
+    # Start the server with explicit configuration for Google Cloud Run
+    uvicorn.run(
+        app, 
+        host="0.0.0.0", 
+        port=port,
+        log_level="info",
+        access_log=True,
+        timeout_keep_alive=30
+    ) 
