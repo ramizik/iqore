@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 import logging
 import asyncio
 from datetime import datetime
+from contextlib import asynccontextmanager
 
 # LangChain imports for OpenAI integration
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
@@ -26,17 +27,6 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
-
-app = FastAPI(title="iQore Chatbot Backend", version="1.0.0")
-
-# Add CORS middleware - matching working vocal AI configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Pydantic models for request/response
 class ChatRequest(BaseModel):
@@ -249,9 +239,9 @@ class ChatbotService:
 # Initialize chatbot service
 chatbot_service = ChatbotService()
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize the chatbot service on startup"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
     logger.info("Starting iQore Chatbot Backend...")
     try:
         success = await chatbot_service.initialize()
@@ -262,12 +252,23 @@ async def startup_event():
     except Exception as e:
         logger.error(f"⚠️ Failed to initialize chatbot service: {e}")
         logger.info("🔄 Server will continue running, but chatbot functionality may be limited")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
+    
+    yield
+    
+    # Shutdown
     chatbot_service.close_connections()
     logger.info("Chatbot backend shutdown complete")
+
+app = FastAPI(title="iQore Chatbot Backend", version="1.0.0", lifespan=lifespan)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 async def root() -> Dict[str, str]:
