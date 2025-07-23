@@ -28,11 +28,11 @@ load_dotenv()
 
 app = FastAPI(title="iQore Chatbot Backend", version="1.0.0")
 
-# Configure CORS
+# Add CORS middleware - matching working vocal AI configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this properly for production
-    allow_credentials=False,  # Set to False when using allow_origins=["*"]
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
