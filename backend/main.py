@@ -11,9 +11,10 @@ from datetime import datetime
 # LangChain imports for OpenAI integration
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain_mongodb import MongoDBAtlasVectorSearch
-from langchain.chains import ConversationalRetrievalChain
-from langchain.memory import ConversationBufferMemory
+from langchain.chains import create_history_aware_retriever, create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
 
 # MongoDB
 from pymongo import MongoClient
@@ -123,35 +124,64 @@ class ChatbotService:
                 openai_api_key=os.getenv('OPENAI_API_KEY')
             )
             
-            system_prompt = """
-            You are a knowledgeable and professional virtual assistant for iQore, a deep-tech company pioneering quantum-classical hybrid compute infrastructure.
-            iQore's core innovation lies in its software-native, platform-agnostic execution layers—iQD (quantum emulator) and iCD (classical compute distribution)—designed to accelerate performance and scalability of enterprise AI and simulation workloads.
-
-            You have access to a curated set of official iQore documents and whitepapers, which you use to answer questions accurately and in detail. When responding, reference the information from these documents when relevant, but do not fabricate answers if the information is not available.
-
-            Your tone is helpful, confident, and persuasive. You offer technical and business insights, and you're able to support a range of user types—from curious visitors to experienced engineers and decision-makers.
-
-            When appropriate, encourage users to:
-            - Request a product demo
-            - Schedule a follow-up meeting
-            - Learn more about specific use cases
-            - Ask deeper questions about the architecture
-
-            Your goal is to inform, engage, and guide potential customers by showcasing the value of iQore's solutions, while being honest if something is outside your knowledge.
-            """
-
-            prompt_template = ChatPromptTemplate.from_messages([
-                ("system", system_prompt),
-                ("human", "{question}")
-            ])
-
-            self.qa_chain = ConversationalRetrievalChain.from_llm(
-                llm=llm,
-                retriever=retriever,
-                return_source_documents=True,
-                combine_docs_chain_kwargs={"prompt": prompt_template},
-                verbose=False
+            # Modern LangChain LCEL implementation (replaces deprecated ConversationalRetrievalChain)
+            
+            # Step 1: Create history-aware retriever that can rephrase questions based on chat history
+            condense_question_system_template = (
+                "Given a chat history and the latest user question "
+                "which might reference context in the chat history, "
+                "formulate a standalone question which can be understood "
+                "without the chat history. Do NOT answer the question, "
+                "just reformulate it if needed and otherwise return it as is."
             )
+            
+            condense_question_prompt = ChatPromptTemplate.from_messages([
+                ("system", condense_question_system_template),
+                ("placeholder", "{chat_history}"),
+                ("human", "{input}"),
+            ])
+            
+            history_aware_retriever = create_history_aware_retriever(
+                llm, retriever, condense_question_prompt
+            )
+            
+            # Step 2: Create the question-answering chain
+            system_prompt = (
+                "You are a knowledgeable and professional virtual assistant for iQore, a deep-tech company "
+                "pioneering quantum-classical hybrid compute infrastructure. iQore's core innovation lies in its "
+                "software-native, platform-agnostic execution layers—iQD (quantum emulator) and iCD (classical "
+                "compute distribution)—designed to accelerate performance and scalability of enterprise AI and "
+                "simulation workloads.\n\n"
+                "You have access to a curated set of official iQore documents and whitepapers, which you use to "
+                "answer questions accurately and in detail. When responding, reference the information from these "
+                "documents when relevant, but do not fabricate answers if the information is not available.\n\n"
+                "Your tone is helpful, confident, and persuasive. You offer technical and business insights, and "
+                "you're able to support a range of user types—from curious visitors to experienced engineers and "
+                "decision-makers.\n\n"
+                "When appropriate, encourage users to:\n"
+                "- Request a product demo\n"
+                "- Schedule a follow-up meeting\n"
+                "- Learn more about specific use cases\n"
+                "- Ask deeper questions about the architecture\n\n"
+                "Your goal is to inform, engage, and guide potential customers by showcasing the value of iQore's "
+                "solutions, while being honest if something is outside your knowledge.\n\n"
+                "Use the following pieces of retrieved context to answer the question. If you don't know the answer, "
+                "say that you don't know. Keep the answer informative but concise.\n\n"
+                "{context}"
+            )
+            
+            qa_prompt = ChatPromptTemplate.from_messages([
+                ("system", system_prompt),
+                ("placeholder", "{chat_history}"),
+                ("human", "{input}"),
+            ])
+            
+            qa_chain = create_stuff_documents_chain(llm, qa_prompt)
+            
+            # Step 3: Combine retriever and QA chain
+            self.qa_chain = create_retrieval_chain(history_aware_retriever, qa_chain)
+            
+            logger.info("✅ Modern LCEL QA chain initialized successfully")
             
             logger.info("Chatbot service initialized successfully")
             return True
@@ -170,12 +200,21 @@ class ChatbotService:
             }
         
         try:
-            # Convert chat_history to the format expected by LangChain
-            langchain_history = [(item["user"], item["assistant"]) for item in chat_history if "user" in item and "assistant" in item]
+            # Convert chat_history to the format expected by modern LCEL chains
+            langchain_history = []
+            for item in chat_history:
+                if "user" in item and "assistant" in item:
+                    langchain_history.append(HumanMessage(content=item["user"]))
+                    langchain_history.append(AIMessage(content=item["assistant"]))
             
-            result = self.qa_chain({"question": message, "chat_history": langchain_history})
+            # Invoke the modern LCEL chain
+            result = self.qa_chain.invoke({
+                "input": message, 
+                "chat_history": langchain_history
+            })
+            
             response = result["answer"]
-            source_docs = result.get("source_documents", [])
+            source_docs = result.get("context", [])  # LCEL chains use "context" instead of "source_documents"
             
             # Format sources
             sources = []
