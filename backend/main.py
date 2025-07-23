@@ -32,7 +32,7 @@ app = FastAPI(title="iQore Chatbot Backend", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Configure this properly for production
-    allow_credentials=True,
+    allow_credentials=False,  # Set to False when using allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )

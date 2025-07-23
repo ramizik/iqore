@@ -11,14 +11,8 @@ import logging
 from datetime import datetime
 
 # LangChain imports for modern OpenAI integration
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_openai import OpenAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_core.prompts import ChatPromptTemplate
-
-# MongoDB Atlas Vector Search and Conversational Chain imports
-from langchain_mongodb import MongoDBAtlasVectorSearch
-from langchain.chains import ConversationalRetrievalChain
-from langchain.memory import ConversationBufferMemory
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -202,106 +196,43 @@ class PDFEmbeddingProcessor:
 
         if not pdf_files:
             logger.info("No PDF files found in pdf folder")
+            print("📁 No PDF files found in the 'pdf' folder")
+            print("📄 Please add PDF files to the 'pdf' folder and run the script again")
             return
 
         logger.info(f"Found {len(pdf_files)} PDF files")
+        print(f"📚 Found {len(pdf_files)} PDF files")
+        
+        processed_count = 0
+        skipped_count = 0
+        
         for pdf_path in pdf_files:
             try:
                 if self.is_pdf_processed(pdf_path):
                     logger.info(f"PDF {pdf_path.name} already processed, skipping...")
+                    print(f"⏭️  Skipping {pdf_path.name} (already processed)")
+                    skipped_count += 1
                     continue
                 
+                print(f"🔄 Processing {pdf_path.name}...")
                 await self.process_pdf(pdf_path)
                 logger.info(f"Successfully processed {pdf_path.name}")
+                print(f"✅ Successfully processed {pdf_path.name}")
+                processed_count += 1
+                
             except Exception as e:
                 logger.error(f"Error processing {pdf_path.name}: {e}")
-    
-    def setup_chatbot(self):
-        """
-        Set up the conversational retrieval chain for chatbot functionality
-        """
-        try:
-            # Check if there are any documents in the collection
-            doc_count = self.pdf_chunks_collection.count_documents({})
-            if doc_count == 0:
-                print("⚠️ No documents found in database. Please add some PDFs first.")
-                return None
-                
-            print(f"📚 Found {doc_count} document chunks in database")
-            
-            # Set up MongoDB Atlas Vector Search
-            vector_store = MongoDBAtlasVectorSearch.from_connection_string(
-                connection_string=os.getenv("MONGODB_URI"),
-                embedding=self.embeddings,
-                namespace=f"{os.getenv('MONGODB_DATABASE')}.pdf_chunks",
-                text_key="text",
-                embedding_key="embedding",
-                relevance_score_fn="cosine"
-            )
-            
-            # Create retriever with more lenient search parameters
-            retriever = vector_store.as_retriever(
-                search_type="similarity",  # Remove score threshold initially
-                search_kwargs={
-                    "k": 5,  # Number of documents to retrieve
-                }
-            )
-            
-            # Alternative: Use similarity_score_threshold with lower threshold
-            # retriever = vector_store.as_retriever(
-            #     search_type="similarity_score_threshold",
-            #     search_kwargs={
-            #         "k": 5,
-            #         "score_threshold": 0.3  # Much lower threshold
-            #     }
-            # )
-            
-            # Set up ChatOpenAI LLM
-            llm = ChatOpenAI(
-                model="gpt-3.5-turbo",
-                temperature=0.7,
-                openai_api_key=os.getenv('OPENAI_API_KEY')
-            )
-            
-            system_prompt = """
-            You are a knowledgeable and professional virtual assistant for iQore, a deep-tech company pioneering quantum-classical hybrid compute infrastructure.
-            iQore's core innovation lies in its software-native, platform-agnostic execution layers—iQD (quantum emulator) and iCD (classical compute distribution)—designed to accelerate performance and scalability of enterprise AI and simulation workloads.
-
-            You have access to a curated set of official iQore documents and whitepapers, which you use to answer questions accurately and in detail. When responding, reference the information from these documents when relevant, but do not fabricate answers if the information is not available.
-
-            Your tone is helpful, confident, and persuasive. You offer technical and business insights, and you’re able to support a range of user types—from curious visitors to experienced engineers and decision-makers.
-
-            When appropriate, encourage users to:
-            - Request a product demo
-            - Schedule a follow-up meeting
-            - Learn more about specific use cases
-            - Ask deeper questions about the architecture
-
-            Your goal is to inform, engage, and guide potential customers by showcasing the value of iQore’s solutions, while being honest if something is outside your knowledge.
-            """
-
-
-            prompt_template = ChatPromptTemplate.from_messages([
-                ("system", system_prompt),
-                ("human", "{question}")
-            ])
-
-            qa_chain = ConversationalRetrievalChain.from_llm(
-                llm=llm,
-                retriever=retriever,
-                return_source_documents=True,
-                combine_docs_chain_kwargs={"prompt": prompt_template},
-                verbose=False
-            )
-            
-            logger.info("Chatbot setup completed successfully")
-            print("✅ Chatbot ready! The retriever will now return documents without score filtering.")
-            return qa_chain
-            
-        except Exception as e:
-            logger.error(f"Error setting up chatbot: {e}")
-            print(f"❌ Failed to set up chatbot: {e}")
-            return None
+                print(f"❌ Error processing {pdf_path.name}: {e}")
+        
+        # Summary
+        print(f"\n📊 Processing Summary:")
+        print(f"   • Processed: {processed_count} files")
+        print(f"   • Skipped: {skipped_count} files")
+        print(f"   • Total files: {len(pdf_files)}")
+        
+        # Check total documents in database
+        total_chunks = self.pdf_chunks_collection.count_documents({})
+        print(f"   • Total chunks in database: {total_chunks}")
     
     def close_connections(self):
         if hasattr(self, 'mongo_client'):
@@ -309,108 +240,29 @@ class PDFEmbeddingProcessor:
             logger.info("MongoDB connection closed")
 
 
-async def run_chatbot(qa_chain):
-    """
-    Run the interactive chatbot CLI loop
-    """
-    print("\n" + "="*60)
-    print("💬 iQore AI Assistant - Ask questions about your documents!")
-    print("💡 Tips:")
-    print("   - Ask specific questions about the content")
-    print("   - Type 'sources' to see document sources in responses")
-    print("   - Type 'exit' or 'quit' to end the conversation")
-    print("="*60)
-    
-    chat_history = []
-    show_sources = False
-    
-    while True:
-        try:
-            # Get user input
-            query = input("\n🤔 You: ").strip()
-            
-            if not query:
-                continue
-                
-            # Handle special commands
-            if query.lower() in ("exit", "quit", "bye"):
-                print("\n👋 Thanks for using iQore AI Assistant! Goodbye!")
-                break
-            elif query.lower() == "sources":
-                show_sources = not show_sources
-                status = "enabled" if show_sources else "disabled"
-                print(f"📄 Source documents display {status}")
-                continue
-            elif query.lower() == "clear":
-                chat_history = []
-                print("🧹 Chat history cleared!")
-                continue
-            elif query.lower() == "help":
-                print("\n📖 Available commands:")
-                print("   - 'sources': Toggle source document display")
-                print("   - 'clear': Clear chat history")
-                print("   - 'help': Show this help message")
-                print("   - 'exit'/'quit'/'bye': End conversation")
-                continue
-            
-            # Process the query
-            print("🤖 iQore Assistant: ", end="", flush=True)
-            
-            result = qa_chain({"question": query, "chat_history": chat_history})
-            answer = result["answer"]
-            source_docs = result.get("source_documents", [])
-            
-            print(answer)
-            
-            # Show source documents if enabled
-            if show_sources and source_docs:
-                print(f"\n📚 Sources ({len(source_docs)} documents):")
-                for i, doc in enumerate(source_docs[:3], 1):  # Show top 3 sources
-                    source = doc.metadata.get("source", "Unknown")
-                    chunk_id = doc.metadata.get("chunk_id", "N/A")
-                    content_preview = doc.page_content[:100] + "..." if len(doc.page_content) > 100 else doc.page_content
-                    print(f"   {i}. {source} (Chunk {chunk_id})")
-                    print(f"      Preview: {content_preview}")
-            
-            # Update chat history
-            chat_history.append((query, answer))
-            
-            # Limit chat history to last 10 exchanges to manage context length
-            if len(chat_history) > 10:
-                chat_history = chat_history[-10:]
-                
-        except KeyboardInterrupt:
-            print("\n\n👋 Conversation interrupted. Goodbye!")
-            break
-        except Exception as e:
-            print(f"\n❌ Error processing your question: {e}")
-            logger.error(f"Chatbot error: {e}")
-
-
 async def main():
     """
-    Main CLI function for PDF embedding and chat
+    Main function for PDF embedding processing
     """
-    print("🤖 iQore PDF Embedding & AI Assistant CLI (Updated with LangChain)")
-    print("=" * 70)
+    print("📄 iQore PDF Embedding Processor")
+    print("=" * 50)
+    print("🔧 This script will:")
+    print("   • Scan the 'pdf' folder for PDF files")
+    print("   • Extract text and create embeddings") 
+    print("   • Store embeddings in MongoDB Atlas")
+    print("   • Skip files that have already been processed")
+    print("=" * 50)
 
     processor = None
     try:
         processor = PDFEmbeddingProcessor()
         
-        # Process PDFs first
+        # Process all PDFs
         await processor.process_all_pdfs()
-        print("\n✅ PDF processing completed!")
-        print("📄 Your PDFs have been embedded and stored in MongoDB Atlas")
-
-        # Set up and run chatbot
-        print("\n🔧 Setting up AI chatbot...")
-        qa_chain = processor.setup_chatbot()
         
-        if qa_chain:
-            await run_chatbot(qa_chain)
-        else:
-            print("❌ Could not start chatbot. Please check your configuration and try again.")
+        print("\n✅ PDF embedding processing completed!")
+        print("📄 Your PDFs have been embedded and stored in MongoDB Atlas")
+        print("🤖 The chatbot backend can now use these embeddings for question answering")
 
     except Exception as e:
         logger.error(f"Error in main: {e}")
