@@ -24,16 +24,34 @@ document.addEventListener('DOMContentLoaded', function() {
 // Check if backend is healthy
 async function checkBackendHealth() {
     try {
-        const response = await fetch(`${API_BASE_URL}/health`);
+        const response = await fetch(`${API_BASE_URL}/health`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            mode: 'cors'  // Explicitly enable CORS
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Health check failed: ${response.status}`);
+        }
+        
         const data = await response.json();
         console.log('Backend health check:', data);
         
         if (data.status === 'healthy') {
             console.log(`✅ Backend is healthy. Document count: ${data.document_count || 0}`);
+            showSystemMessage(`✅ Connected to iQore AI Backend (${data.document_count || 0} documents loaded)`, 'info');
         }
     } catch (error) {
         console.error('❌ Backend health check failed:', error);
-        showSystemMessage('Warning: Unable to connect to the backend service. Please check your connection.', 'warning');
+        showSystemMessage('⚠️ Could not connect to iQore AI Backend. Trying to reconnect...', 'warning');
+        
+        // Retry connection after 3 seconds
+        setTimeout(() => {
+            checkBackendHealth();
+        }, 3000);
     }
 }
 
@@ -68,8 +86,10 @@ async function sendMessage() {
         const response = await fetch(CHAT_ENDPOINT, {
             method: 'POST',
             headers: {
+                'Accept': 'application/json',
                 'Content-Type': 'application/json',
             },
+            mode: 'cors',  // Explicitly enable CORS
             body: JSON.stringify({
                 message: message,
                 chat_history: chatHistory
@@ -99,11 +119,18 @@ async function sendMessage() {
         // Remove typing indicator
         removeTypingIndicator(typingIndicator);
         
-        // Show error message
-        addMessage(
-            "I'm sorry, but I'm having trouble connecting to the server right now. Please try again in a moment.",
-            'ai'
-        );
+        // Show appropriate error message based on error type
+        let errorMessage = "I'm sorry, but I'm having trouble connecting to the server right now. Please try again in a moment.";
+        
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            errorMessage = "Unable to reach the iQore AI Backend. Please check your internet connection and try again.";
+        } else if (error.message.includes('500')) {
+            errorMessage = "The iQore AI service is experiencing issues. Please try again in a few moments.";
+        } else if (error.message.includes('429')) {
+            errorMessage = "Too many requests. Please wait a moment before trying again.";
+        }
+        
+        addMessage(errorMessage, 'ai');
     } finally {
         setLoading(false);
         messageInput.focus();
