@@ -6,18 +6,109 @@ const CHAT_ENDPOINT = `${API_BASE_URL}/api/v1/chat`;
 // Global state
 let chatHistory = [];
 let isLoading = false;
+let currentSuggestions = [];
 
 // DOM elements
 const messagesContainer = document.getElementById('messagesContainer');
 const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
+const suggestionsContainer = document.getElementById('suggestionsContainer');
 
 // Initialize the chat interface
 document.addEventListener('DOMContentLoaded', function() {
     console.log('iQore Chatbot Frontend initialized');
     messageInput.focus();
+    showInitialSuggestions();
 });
 
+// Initial suggestions when chat starts
+function showInitialSuggestions() {
+    const initialSuggestions = [
+        "What is iQore's quantum computing technology?",
+        "How does hybrid quantum-classical computing work?",
+        "Tell me about iQore's architecture",
+        "What are the main applications of iQore's solutions?"
+    ];
+    updateSuggestions(initialSuggestions);
+}
+
+// Generate contextual suggestions based on the last AI response
+function generateContextualSuggestions(lastAiMessage) {
+    // Simple keyword-based suggestion generation
+    const message = lastAiMessage.toLowerCase();
+    
+    if (message.includes('quantum') || message.includes('qubit')) {
+        return [
+            "How many qubits does iQore support?",
+            "What quantum algorithms does iQore implement?",
+            "Tell me more about quantum advantage"
+        ];
+    } else if (message.includes('architecture') || message.includes('infrastructure')) {
+        return [
+            "How does iQore's software stack work?",
+            "What about scalability and performance?",
+            "Can you explain the execution layers?"
+        ];
+    } else if (message.includes('application') || message.includes('use case')) {
+        return [
+            "What industries benefit from iQore?",
+            "Show me specific use cases",
+            "How does this compare to classical computing?"
+        ];
+    } else if (message.includes('demo') || message.includes('meeting')) {
+        return [
+            "What should I prepare for a demo?",
+            "How long does a typical demo take?",
+            "What technical requirements are needed?"
+        ];
+    } else {
+        // Default contextual suggestions
+        return [
+            "Can you give me a specific example?",
+            "How does this benefit enterprises?",
+            "What's the next step to learn more?"
+        ];
+    }
+}
+
+// Update suggestion bubbles
+function updateSuggestions(suggestions) {
+    currentSuggestions = suggestions;
+    
+    // Clear existing suggestions
+    suggestionsContainer.innerHTML = '';
+    
+    if (suggestions.length === 0) {
+        suggestionsContainer.style.display = 'none';
+        return;
+    }
+    
+    suggestionsContainer.style.display = 'flex';
+    
+    suggestions.forEach((suggestion, index) => {
+        const suggestionBubble = document.createElement('button');
+        suggestionBubble.className = 'suggestion-bubble';
+        suggestionBubble.textContent = suggestion;
+        suggestionBubble.onclick = () => handleSuggestionClick(suggestion);
+        
+        // Add slight delay for animation
+        setTimeout(() => {
+            suggestionBubble.classList.add('visible');
+        }, index * 100);
+        
+        suggestionsContainer.appendChild(suggestionBubble);
+    });
+}
+
+// Handle suggestion bubble click
+function handleSuggestionClick(suggestion) {
+    // Set the input value and send the message
+    messageInput.value = suggestion;
+    sendMessage();
+    
+    // Hide suggestions temporarily while processing
+    suggestionsContainer.style.display = 'none';
+}
 // Removed backend health check display as per user request
 
 // Handle Enter key press in input field
@@ -73,6 +164,12 @@ async function sendMessage() {
         // Add AI response to chat
         addMessage(data.response, 'ai');
         
+        // Generate and show new contextual suggestions
+        const newSuggestions = generateContextualSuggestions(data.response);
+        setTimeout(() => {
+            updateSuggestions(newSuggestions);
+        }, 500); // Small delay to let user read the response first
+        
         // Update chat history
         chatHistory = data.chat_history || [];
         
@@ -96,6 +193,15 @@ async function sendMessage() {
         }
         
         addMessage(errorMessage, 'ai');
+        
+        // Show general suggestions on error
+        setTimeout(() => {
+            updateSuggestions([
+                "Let me try a different question",
+                "What is iQore's main technology?",
+                "How can I learn more about iQore?"
+            ]);
+        }, 500);
     } finally {
         setLoading(false);
         messageInput.focus();
@@ -212,6 +318,11 @@ function setLoading(loading) {
     isLoading = loading;
     sendButton.disabled = loading;
     messageInput.disabled = loading;
+    
+    // Hide suggestions while loading
+    if (loading) {
+        suggestionsContainer.style.display = 'none';
+    }
     
     if (loading) {
         sendButton.style.opacity = '0.5';
