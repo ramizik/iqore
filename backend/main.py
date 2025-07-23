@@ -257,7 +257,12 @@ async def root() -> Dict[str, str]:
 @app.get("/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
     """Health check endpoint for Google Cloud Run"""
-    doc_count = chatbot_service.get_document_count()
+    try:
+        doc_count = chatbot_service.get_document_count() if chatbot_service else 0
+    except Exception as e:
+        logger.warning(f"Could not get document count: {e}")
+        doc_count = 0
+    
     return HealthResponse(
         status="healthy",
         service="iqore-chatbot-backend",
@@ -268,7 +273,12 @@ async def health_check() -> HealthResponse:
 @app.get("/api/v1/status")
 async def api_status() -> Dict[str, str]:
     """API status endpoint"""
-    doc_count = chatbot_service.get_document_count()
+    try:
+        doc_count = chatbot_service.get_document_count() if chatbot_service else 0
+    except Exception as e:
+        logger.warning(f"Could not get document count for status: {e}")
+        doc_count = 0
+    
     return {
         "api_version": "v1",
         "status": "active",
