@@ -9,6 +9,8 @@ import asyncio
 from datetime import datetime
 from contextlib import asynccontextmanager
 import operator
+import uuid
+import re
 
 # LangChain imports for OpenAI integration
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
@@ -56,6 +58,10 @@ class AgentState(TypedDict):
     user_intent: str  # Detected user intent (demo, contact, technical, business)
     lead_info: Dict  # Information about potential leads
     chat_history: List[Dict[str, str]]  # Chat history for context
+    # Phase 1: Demo-specific state management
+    demo_state: str  # "initial", "collecting_info", "confirming", "queued"
+    demo_user_info: Dict  # {"name": "", "email": "", "company": "", "interest_areas": []}
+    demo_session_id: str  # Unique session identifier for queue tracking
 
 # Global variables for chatbot
 qa_chain = None
@@ -74,6 +80,8 @@ class ChatbotService:
         self.mongo_client = None
         self.db = None
         self.pdf_chunks_collection = None
+        # Phase 2: Initialize demo queue collection reference
+        self.demo_queue_collection = None
         self.multi_agent_graph = None
         self.llm = None
         
@@ -104,6 +112,8 @@ class ChatbotService:
             
             self.db = self.mongo_client[db_name]
             self.pdf_chunks_collection = self.db['pdf_chunks']
+            # Phase 2: Initialize demo queue collection
+            self.demo_queue_collection = self.db['demo_queue']
             
             # Check if there are documents in the collection
             doc_count = self.pdf_chunks_collection.count_documents({})
@@ -111,6 +121,10 @@ class ChatbotService:
                 logger.warning("No documents found in database. Technical agent will work with limited context.")
                 
             logger.info(f"Found {doc_count} document chunks in database")
+            
+            # Phase 2: Check demo queue collection
+            demo_queue_count = self.demo_queue_collection.count_documents({})
+            logger.info(f"Demo queue initialized with {demo_queue_count} existing entries")
             
             # Initialize the traditional RAG chain for technical agent
             await self._initialize_rag_chain()
@@ -303,51 +317,359 @@ class ChatbotService:
         """Determine which agent to call next based on supervisor decision"""
         return state.get("next", "END")
     
-    def _demo_agent_node(self, state: AgentState) -> AgentState:
-        """Demo Agent - Handles demo requests and product demonstrations"""
+    async def _demo_agent_node(self, state: AgentState) -> AgentState:
+        """Phase 3: Demo Agent with natural conversation flow and queue management"""
         try:
-            demo_prompt = ChatPromptTemplate.from_messages([
-                ("system", 
-                 "You are the Demo Experience Coordinator for iQore's booth at this quantum computing convention. "
-                 "Your mission is to get visitors excited about our live demonstration and guide them through the sign-up process.\n\n"
-                 "What you showcase:\n"
-                 "🎯 LIVE QUANTUM ALGORITHMS: Watch real-time execution of quantum algorithms on iQore's hybrid architecture\n"
-                 "🔧 iQD + iCD IN ACTION: See our quantum emulator (iQD) seamlessly integrate with classical compute distribution (iCD)\n"
-                 "📊 PERFORMANCE METRICS: Live performance comparisons showing speed, accuracy, and efficiency gains\n"
-                 "🏗️ ARCHITECTURE WALKTHROUGH: Visual demonstration of how our quantum-classical hybrid system works\n\n"
-                 "Demo Session Experience (15-20 minutes):\n"
-                 "• Interactive algorithm selection and execution\n"
-                 "• Real-time performance monitoring and analysis\n" 
-                 "• Q&A with our quantum engineers\n"
-                 "• Hands-on exploration of use cases relevant to their industry\n\n"
-                 "Your goal: Get them excited about the technology and signed up for a demo slot! "
-                 "Be enthusiastic but professional. Explain the value they'll get from attending. "
-                 "Let them know demo slots are limited and popular. "
-                 "Keep responses concise (2-3 sentences) and always end with a call-to-action to join the demo queue."),
-                ("human", "{input}")
-            ])
-            
             latest_message = state["messages"][-1]
-            formatted_prompt = demo_prompt.format_messages(input=latest_message.content)
-            response = self.llm.invoke(formatted_prompt)
             
-            # Add agent response to messages
-            agent_message = AIMessage(
-                content=response.content,
+            # Check if user is asking for queue status and has a session ID
+            if (self._detect_queue_status_intent(latest_message.content) and 
+                state.get("demo_session_id")):
+                # User is in queue and asking for status
+                return await self._demo_queue_status_stage(state)
+            
+            # Get current demo state (default to "initial" if not set)
+            demo_state = state.get("demo_state", "initial")
+            
+            # Route to appropriate stage based on current state
+            if demo_state == "initial":
+                return await self._demo_initial_stage(state)
+            elif demo_state == "collecting_info":
+                return await self._demo_collect_info_stage(state)
+            elif demo_state == "confirming":
+                return await self._demo_confirm_stage(state)
+            elif demo_state == "queued":
+                return await self._demo_queue_status_stage(state)
+            else:
+                # Fallback to initial stage
+                return await self._demo_initial_stage(state)
+                
+        except Exception as e:
+            logger.error(f"Error in demo agent: {e}")
+            error_message = AIMessage(
+                content="I'd love to help you with our quantum computing demo! How can I assist you?",
                 name="demo_agent"
             )
+            state["messages"].append(error_message)
+            state["next"] = "END"
+            return state
+    
+    async def _demo_initial_stage(self, state: AgentState) -> AgentState:
+        """Phase 3: Enhanced initial demo introduction with natural response handling"""
+        try:
+            latest_message = state["messages"][-1]
+            user_message = latest_message.content
+            
+            # Check if this is the very first demo interaction or a follow-up response
+            chat_history = state.get("chat_history", [])
+            is_first_demo_message = len([msg for msg in state.get("messages", []) if getattr(msg, 'name', '') == 'demo_agent']) == 0
+            
+            if is_first_demo_message:
+                # First time - show full demo description
+                demo_prompt = ChatPromptTemplate.from_messages([
+                    ("system", 
+                     "You are the Demo Experience Coordinator for iQore's booth at this quantum computing convention. "
+                     "Your mission is to get visitors excited about our live demonstration.\n\n"
+                     "🎯 QUANTUM ALGORITHMS WE DEMONSTRATE:\n"
+                     "• Variational Quantum Eigensolver (VQE) for molecular simulation\n"
+                     "• Quantum Approximate Optimization Algorithm (QAOA) for logistics optimization\n"
+                     "• Grover's Search Algorithm for database optimization\n"
+                     "• Shor's Algorithm simulation for cryptography research\n"
+                     "• Quantum Machine Learning algorithms for pattern recognition\n\n"
+                     "🔧 WHAT YOU'LL SEE:\n"
+                     "• iQD (quantum emulator) + iCD (classical compute) working together\n"
+                     "• Real-time performance metrics and comparisons\n"
+                     "• Interactive algorithm selection and execution\n"
+                     "• Live Q&A with our quantum engineers (15-20 minutes)\n\n"
+                     "Your goal: Get them excited and ask if they'd like to sign up for a demo slot! "
+                     "Be enthusiastic but professional. Mention that slots are limited and popular. "
+                     "End with: 'Would you like to reserve a spot in our demo queue?'"),
+                    ("human", "{input}")
+                ])
+                
+                formatted_prompt = demo_prompt.format_messages(input=user_message)
+                response = self.llm.invoke(formatted_prompt)
+                response_content = response.content
+                
+            else:
+                # Follow-up response - check user intent
+                if self._detect_signup_intent(user_message):
+                    # User wants to sign up - move to info collection
+                    current_queue_length = await self.get_current_queue_length()
+                    wait_time = await self.estimate_wait_time()
+                    
+                    response_content = (
+                        f"Fantastic! Let me get you signed up. 🎉\n\n"
+                        f"📊 **Current Queue Status:** {current_queue_length} people waiting (~{wait_time} minutes)\n\n"
+                        f"To reserve your spot, I'll need your name and email address. What's your name?"
+                    )
+                    state["demo_state"] = "collecting_info"
+                    
+                elif self._detect_queue_status_intent(user_message):
+                    # User asking about queue - provide general info
+                    current_queue_length = await self.get_current_queue_length()
+                    wait_time = await self.estimate_wait_time()
+                    
+                    response_content = (
+                        f"📊 **Current Demo Queue Status:**\n"
+                        f"• People waiting: {current_queue_length}\n"
+                        f"• Estimated wait for new signups: {wait_time} minutes\n"
+                        f"• Demo duration: 15-20 minutes each\n\n"
+                        f"Would you like me to add you to the queue?"
+                    )
+                    
+                else:
+                    # General follow-up or questions about demo
+                    demo_followup_prompt = ChatPromptTemplate.from_messages([
+                        ("system",
+                         "You are helping someone who's interested in our quantum computing demo. "
+                         "Answer their questions about the demo content, what they'll see, or technical details. "
+                         "Be helpful and encouraging. Always end by asking if they'd like to sign up for the queue."),
+                        ("human", "{input}")
+                    ])
+                    
+                    formatted_prompt = demo_followup_prompt.format_messages(input=user_message)
+                    response = self.llm.invoke(formatted_prompt)
+                    response_content = response.content
+            
+            # Add agent response
+            agent_message = AIMessage(content=response_content, name="demo_agent")
             state["messages"].append(agent_message)
-            state["next"] = "END"  # Demo agent completes the interaction
+            
+            # Stay in demo agent for continued interaction
+            state["next"] = "demo_agent"
             
             return state
             
         except Exception as e:
-            logger.error(f"Error in demo agent: {e}")
+            logger.error(f"Error in demo initial stage: {e}")
             error_message = AIMessage(
-                content="I'd love to show you our demo! Let me connect you with our technical team at the booth for a hands-on demonstration.",
+                content="I'd love to show you our quantum computing demo! Would you like to reserve a spot in our demo queue?",
                 name="demo_agent"
             )
             state["messages"].append(error_message)
+            state["next"] = "demo_agent"
+            return state
+    
+    async def _demo_collect_info_stage(self, state: AgentState) -> AgentState:
+        """Phase 3: Natural conversation for collecting user information"""
+        try:
+            latest_message = state["messages"][-1]
+            current_info = state.get("demo_user_info", {})
+            
+            # Extract information from user's message
+            extracted_info, info_complete = self._extract_user_info(latest_message.content, current_info)
+            
+            # Update demo_user_info with extracted information
+            state["demo_user_info"] = extracted_info
+            
+            # Log what information was extracted for debugging
+            logger.info(f"Extracted info: {extracted_info}, Complete: {info_complete}")
+            
+            # Generate natural response based on what information we have
+            if info_complete:
+                # We have name and email, move to confirmation
+                response_content = (
+                    f"Perfect! Let me confirm your details:\n"
+                    f"📝 Name: {extracted_info['name']}\n"
+                    f"📧 Email: {extracted_info['email']}\n"
+                    f"🏢 Company: {extracted_info.get('company', 'Not specified')}\n\n"
+                    f"I'll add you to our demo queue right away. Does this look correct?"
+                )
+                state["demo_state"] = "confirming"
+                state["next"] = "demo_agent"
+            else:
+                # Generate natural follow-up question
+                response_content = self._generate_info_request(extracted_info)
+                state["demo_state"] = "collecting_info"
+                state["next"] = "demo_agent"
+            
+            agent_message = AIMessage(content=response_content, name="demo_agent")
+            state["messages"].append(agent_message)
+            return state
+            
+        except Exception as e:
+            logger.error(f"Error in demo collect info stage: {e}")
+            agent_message = AIMessage(
+                content="I'd love to get you signed up! Could you please share your name and email address?",
+                name="demo_agent"
+            )
+            state["messages"].append(agent_message)
+            state["next"] = "demo_agent"
+            return state
+    
+    async def _demo_confirm_stage(self, state: AgentState) -> AgentState:
+        """Phase 3: Handle confirmation and queue addition"""
+        try:
+            latest_message = state["messages"][-1]
+            user_response = latest_message.content.lower().strip()
+            
+            # Check if user confirms (yes, correct, confirm, etc.)
+            confirm_keywords = ['yes', 'correct', 'confirm', 'right', 'good', 'ok', 'okay', 'sure', 'yep', 'yeah']
+            deny_keywords = ['no', 'wrong', 'incorrect', 'change', 'fix', 'edit']
+            
+            if any(keyword in user_response for keyword in confirm_keywords):
+                # User confirmed - add to queue
+                user_info = state.get("demo_user_info", {})
+                
+                if user_info.get("name") and user_info.get("email"):
+                    # Add to demo queue
+                    queue_result = await self.add_to_demo_queue(user_info)
+                    
+                    if queue_result.get("success"):
+                        session_id = queue_result["session_id"]
+                        position = queue_result["queue_position"]
+                        wait_time = queue_result["estimated_wait_time"]
+                        
+                        # Store session ID for future reference
+                        state["demo_session_id"] = session_id
+                        state["demo_state"] = "queued"
+                        
+                        response_content = (
+                            f"🎉 Excellent! You're now in our demo queue.\n\n"
+                            f"📊 **Your Queue Status:**\n"
+                            f"• Position: #{position}\n"
+                            f"• Estimated wait: {wait_time} minutes\n"
+                            f"• Demo duration: 15-20 minutes\n\n"
+                            f"📍 **Next Steps:**\n"
+                            f"• Find our demo station (look for the iQore quantum booth)\n"
+                            f"• Our team will call your name when it's your turn\n"
+                            f"• Feel free to explore other booths while you wait!\n\n"
+                            f"💬 You can ask me for queue updates anytime by saying 'queue status' or 'how long is my wait?'\n"
+                            f"🆔 Your session ID: `{session_id}`"
+                        )
+                        
+                        logger.info(f"Successfully added {user_info['name']} to demo queue at position {position}")
+                        
+                    else:
+                        response_content = (
+                            "I apologize, but there was an issue adding you to the queue. "
+                            "Please find one of our team members at the booth, and they'll help you sign up directly!"
+                        )
+                        state["demo_state"] = "initial"
+                        
+                else:
+                    response_content = "I seem to be missing some information. Let me collect your details again."
+                    state["demo_state"] = "collecting_info"
+                    
+            elif any(keyword in user_response for keyword in deny_keywords):
+                # User wants to make changes
+                response_content = (
+                    "No problem! Let's update your information. "
+                    "Please share your correct name and email address, and I'll update your details."
+                )
+                state["demo_state"] = "collecting_info"
+                # Clear current info to restart collection
+                state["demo_user_info"] = {}
+                
+            else:
+                # Unclear response - ask for clarification
+                response_content = (
+                    "I want to make sure I have this right. "
+                    "Should I add you to the demo queue with these details? "
+                    "Please respond with 'yes' to confirm or 'no' to make changes."
+                )
+                # Stay in confirming state
+                state["demo_state"] = "confirming"
+            
+            agent_message = AIMessage(content=response_content, name="demo_agent")
+            state["messages"].append(agent_message)
+            state["next"] = "demo_agent" if state["demo_state"] != "queued" else "END"
+            
+            return state
+            
+        except Exception as e:
+            logger.error(f"Error in demo confirm stage: {e}")
+            agent_message = AIMessage(
+                content="There was an issue processing your signup. Please visit our booth directly for assistance!",
+                name="demo_agent"
+            )
+            state["messages"].append(agent_message)
+            state["next"] = "END"
+            return state
+    
+    async def _demo_queue_status_stage(self, state: AgentState) -> AgentState:
+        """Phase 3: Handle queue status requests and updates"""
+        try:
+            latest_message = state["messages"][-1]
+            session_id = state.get("demo_session_id", "")
+            
+            if session_id:
+                # Get current queue status
+                status_result = await self.get_queue_status(session_id)
+                
+                if status_result.get("success"):
+                    position = status_result["queue_position"]
+                    wait_time = status_result["estimated_wait_time"]
+                    name = status_result["name"]
+                    total_queue = status_result["total_in_queue"]
+                    
+                    if position == 1:
+                        response_content = (
+                            f"🎉 Great news, {name}! You're **next in line**!\n\n"
+                            f"📍 Please head to our demo station now - our team should be calling your name any moment. "
+                            f"Look for the iQore quantum computing booth!\n\n"
+                            f"⏱️ Your demo will last about 15-20 minutes with hands-on quantum algorithm exploration."
+                        )
+                    elif position <= 3:
+                        response_content = (
+                            f"📊 **Queue Update for {name}:**\n"
+                            f"• Current position: #{position}\n"
+                            f"• Estimated wait: {wait_time} minutes\n"
+                            f"• Total people in queue: {total_queue}\n\n"
+                            f"🔔 You're coming up soon! Stay nearby - we'll call your name when it's your turn."
+                        )
+                    else:
+                        response_content = (
+                            f"📊 **Queue Update for {name}:**\n"
+                            f"• Current position: #{position}\n"
+                            f"• Estimated wait: {wait_time} minutes\n"
+                            f"• Total people in queue: {total_queue}\n\n"
+                            f"⏰ You have some time to explore other booths! "
+                            f"Come back in about {max(wait_time - 10, 5)} minutes, or ask me for another update anytime."
+                        )
+                else:
+                    response_content = (
+                        "I'm having trouble finding your queue entry. "
+                        "Please visit our booth directly, and our team will help you!"
+                    )
+            else:
+                # No session ID - user might be asking about general queue or wanting to sign up
+                user_message = latest_message.content.lower()
+                
+                if any(word in user_message for word in ['status', 'wait', 'long', 'queue', 'position']):
+                    # General queue inquiry
+                    queue_length = await self.get_current_queue_length()
+                    wait_time = await self.estimate_wait_time()
+                    
+                    response_content = (
+                        f"📊 **Current Demo Queue Status:**\n"
+                        f"• People waiting: {queue_length}\n"
+                        f"• Estimated wait for new signups: {wait_time} minutes\n\n"
+                        f"Would you like to join the queue? I can sign you up right now!"
+                    )
+                else:
+                    # User might want to sign up
+                    response_content = (
+                        "I don't see you in our demo queue yet. "
+                        "Would you like me to sign you up for a quantum computing demonstration? "
+                        "It only takes a moment to get you added!"
+                    )
+                    state["demo_state"] = "initial"
+            
+            agent_message = AIMessage(content=response_content, name="demo_agent")
+            state["messages"].append(agent_message)
+            state["next"] = "END"
+            
+            return state
+            
+        except Exception as e:
+            logger.error(f"Error in demo queue status stage: {e}")
+            agent_message = AIMessage(
+                content="I can help you check your demo queue status! Ask me about your queue position anytime.",
+                name="demo_agent"
+            )
+            state["messages"].append(agent_message)
             state["next"] = "END"
             return state
     
@@ -547,11 +869,15 @@ class ChatbotService:
                 next="",
                 user_intent="",
                 lead_info={},
-                chat_history=chat_history
+                chat_history=chat_history,
+                # Phase 1: Initialize demo state fields
+                demo_state="initial",
+                demo_user_info={},
+                demo_session_id=""
             )
             
-            # Run the multi-agent workflow
-            final_state = self.multi_agent_graph.invoke(initial_state)
+            # Run the multi-agent workflow (now supports async nodes)
+            final_state = await self.multi_agent_graph.ainvoke(initial_state)
             
             # Extract the final AI response
             ai_messages = [msg for msg in final_state["messages"] if isinstance(msg, AIMessage)]
@@ -628,6 +954,260 @@ class ChatbotService:
             return 0
         return self.pdf_chunks_collection.count_documents({})
     
+    # Phase 2: Demo Queue Management Methods
+    async def add_to_demo_queue(self, user_info: Dict) -> Dict:
+        """Add user to demo queue and return queue status"""
+        try:
+            if self.demo_queue_collection is None:
+                raise Exception("Demo queue collection not initialized")
+            
+            # Generate unique session ID
+            session_id = str(uuid.uuid4())
+            
+            # Get current queue position
+            queue_length = await self.get_current_queue_length()
+            queue_position = queue_length + 1
+            
+            # Estimate wait time (15-20 minutes per demo, assume 17.5 avg)
+            estimated_wait_time = queue_position * 17.5 if queue_position > 1 else 0
+            
+            # Create queue entry
+            queue_entry = {
+                "session_id": session_id,
+                "name": user_info.get("name", ""),
+                "email": user_info.get("email", ""),
+                "company": user_info.get("company", ""),
+                "interest_areas": user_info.get("interest_areas", []),
+                "timestamp": datetime.utcnow(),
+                "status": "waiting",
+                "queue_position": queue_position,
+                "estimated_wait_time": int(estimated_wait_time),
+                "notes": ""
+            }
+            
+            # Insert into database
+            result = self.demo_queue_collection.insert_one(queue_entry)
+            
+            logger.info(f"Added user {user_info.get('name')} to demo queue with session_id: {session_id}")
+            
+            return {
+                "success": True,
+                "session_id": session_id,
+                "queue_position": queue_position,
+                "estimated_wait_time": int(estimated_wait_time),
+                "queue_length": queue_length + 1
+            }
+            
+        except Exception as e:
+            logger.error(f"Error adding to demo queue: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def get_queue_status(self, session_id: str) -> Dict:
+        """Get current queue status for a specific user"""
+        try:
+            if self.demo_queue_collection is None:
+                return {"success": False, "error": "Demo queue not available"}
+            
+            # Find user's queue entry
+            user_entry = self.demo_queue_collection.find_one({"session_id": session_id})
+            
+            if not user_entry:
+                return {"success": False, "error": "Session not found in queue"}
+            
+            # Calculate current position based on waiting entries before this user
+            current_position = self.demo_queue_collection.count_documents({
+                "status": "waiting",
+                "timestamp": {"$lt": user_entry["timestamp"]}
+            }) + 1
+            
+            # Recalculate estimated wait time
+            estimated_wait_time = (current_position - 1) * 17.5 if current_position > 1 else 0
+            
+            return {
+                "success": True,
+                "session_id": session_id,
+                "name": user_entry["name"],
+                "status": user_entry["status"],
+                "queue_position": current_position,
+                "estimated_wait_time": int(estimated_wait_time),
+                "total_in_queue": await self.get_current_queue_length()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting queue status: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def get_current_queue_length(self) -> int:
+        """Get current number of people waiting in demo queue"""
+        try:
+            if self.demo_queue_collection is None:
+                return 0
+            return self.demo_queue_collection.count_documents({"status": "waiting"})
+        except Exception as e:
+            logger.error(f"Error getting queue length: {e}")
+            return 0
+    
+    async def estimate_wait_time(self) -> int:
+        """Estimate wait time for new queue entry in minutes"""
+        try:
+            queue_length = await self.get_current_queue_length()
+            # Average demo time is 17.5 minutes
+            return int(queue_length * 17.5)
+        except Exception as e:
+            logger.error(f"Error estimating wait time: {e}")
+            return 0
+    
+    def _validate_email(self, email: str) -> bool:
+        """Validate email format"""
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return re.match(email_pattern, email) is not None
+    
+    def _generate_session_id(self) -> str:
+        """Generate unique session ID for queue tracking"""
+        return str(uuid.uuid4())
+    
+    # Phase 3: Natural Language Processing for Demo Signups
+    def _extract_user_info(self, message: str, current_info: Dict) -> tuple[Dict, bool]:
+        """Extract user information from natural language message"""
+        try:
+            message_lower = message.lower().strip()
+            
+            # Initialize with current info
+            info = current_info.copy()
+            
+            # Extract name (look for patterns like "my name is", "I'm", "name's")
+            name_patterns = [
+                r"my name is ([a-zA-Z\s]+)",
+                r"i'm ([a-zA-Z\s]+)",
+                r"name's ([a-zA-Z\s]+)",
+                r"i am ([a-zA-Z\s]+)",
+                r"call me ([a-zA-Z\s]+)",
+                r"this is ([a-zA-Z\s]+)"
+            ]
+            
+            for pattern in name_patterns:
+                name_match = re.search(pattern, message_lower)
+                if name_match:
+                    potential_name = name_match.group(1).strip().title()
+                    # Validate name (should be 2-50 chars, only letters and spaces)
+                    if 2 <= len(potential_name) <= 50 and re.match(r'^[a-zA-Z\s]+$', potential_name):
+                        info['name'] = potential_name
+                        break
+            
+            # If no name pattern found, check if message might be just a name
+            if not info.get('name') and not current_info.get('name'):
+                # Check if message is likely just a name (no @ symbol, reasonable length)
+                if 2 <= len(message.strip()) <= 50 and '@' not in message and re.match(r'^[a-zA-Z\s]+$', message.strip()):
+                    # Could be a name response
+                    words = message.strip().split()
+                    if 1 <= len(words) <= 4:  # Reasonable name length
+                        info['name'] = message.strip().title()
+            
+            # Handle conversational responses about having email but not wanting to share it yet
+            if not info.get('email') and current_info.get('name') and not current_info.get('email'):
+                # Check if they mentioned email but didn't provide it
+                email_mention_patterns = [
+                    r"email",
+                    r"e-mail", 
+                    r"contact",
+                    r"reach me"
+                ]
+                if any(re.search(pattern, message_lower) for pattern in email_mention_patterns):
+                    # They mentioned email - they're responding to email request
+                    pass  # Will be handled by the email extraction above
+            
+            # Extract email
+            email_pattern = r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
+            email_match = re.search(email_pattern, message)
+            if email_match:
+                potential_email = email_match.group(0).lower()
+                if self._validate_email(potential_email):
+                    info['email'] = potential_email
+            
+            # Extract company (look for patterns like "I work at", "from", "company is")
+            company_patterns = [
+                r"i work at ([a-zA-Z0-9\s&.-]+)",
+                r"work for ([a-zA-Z0-9\s&.-]+)",
+                r"from ([a-zA-Z0-9\s&.-]+)",
+                r"company is ([a-zA-Z0-9\s&.-]+)",
+                r"at ([a-zA-Z0-9\s&.-]+)",
+                r"with ([a-zA-Z0-9\s&.-]+)"
+            ]
+            
+            for pattern in company_patterns:
+                company_match = re.search(pattern, message_lower)
+                if company_match:
+                    potential_company = company_match.group(1).strip().title()
+                    # Validate company name
+                    if 2 <= len(potential_company) <= 100:
+                        info['company'] = potential_company
+                        break
+            
+            # Check if we have minimum required info (name and email)
+            info_complete = bool(info.get('name') and info.get('email'))
+            
+            return info, info_complete
+            
+        except Exception as e:
+            logger.error(f"Error extracting user info: {e}")
+            return current_info, False
+    
+    def _generate_info_request(self, current_info: Dict) -> str:
+        """Generate natural follow-up question based on what info we have"""
+        try:
+            has_name = bool(current_info.get('name'))
+            has_email = bool(current_info.get('email'))
+            
+            if not has_name and not has_email:
+                # Need both name and email
+                return (
+                    "Great! I'd love to get you signed up for our quantum computing demo. "
+                    "To reserve your spot, I'll need your name and email address. What's your name?"
+                )
+            elif has_name and not has_email:
+                # Have name, need email
+                name = current_info['name']
+                return (
+                    f"Perfect, {name}! Now I'll need your email address to complete your demo signup. "
+                    f"What email should I use for your reservation?"
+                )
+            elif not has_name and has_email:
+                # Have email, need name  
+                return (
+                    "Thanks for the email! And what's your name so I can properly add you to our demo queue?"
+                )
+            else:
+                # This shouldn't happen if info_complete logic is correct
+                return (
+                    "I think I have your information! Let me confirm the details with you."
+                )
+                
+        except Exception as e:
+            logger.error(f"Error generating info request: {e}")
+            return "Could you please share your name and email address for the demo signup?"
+    
+    def _detect_signup_intent(self, message: str) -> bool:
+        """Detect if user wants to sign up for demo"""
+        message_lower = message.lower()
+        signup_keywords = [
+            'yes', 'sure', 'sign me up', 'sign up', 'register', 'join', 'add me',
+            'reserve', 'book', 'interested', 'i want', "i'd like", 'count me in',
+            'put me', 'include me', 'absolutely', 'definitely'
+        ]
+        return any(keyword in message_lower for keyword in signup_keywords)
+    
+    def _detect_queue_status_intent(self, message: str) -> bool:
+        """Detect if user is asking about queue status"""
+        message_lower = message.lower()
+        status_keywords = [
+            'queue', 'wait', 'status', 'position', 'how long', 'when', 'time',
+            'check', 'update', 'where am i', 'my turn', 'next'
+        ]
+        return any(keyword in message_lower for keyword in status_keywords)
+    
     def close_connections(self):
         """Close database connections"""
         if self.mongo_client is not None:
@@ -672,10 +1252,12 @@ app.add_middleware(
 async def root() -> Dict[str, str]:
     """Root endpoint"""
     return {
-        "message": "iQore Multi-Agent Chatbot Backend is running",
+        "message": "iQore Multi-Agent ChatBot Backend with Phase 3 Demo Queue",
         "status": "healthy",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "agents": ["supervisor", "demo_agent", "contact_agent", "technical_agent", "business_agent"],
+        "features": ["natural_conversation", "demo_queue_management", "user_info_extraction", "vector_search"],
+        "demo_capabilities": ["natural_signup", "queue_tracking", "status_updates", "multi_turn_conversations"],
         "port": str(os.environ.get("PORT", "8080"))
     }
 
@@ -687,6 +1269,13 @@ async def health_check() -> HealthResponse:
     except Exception as e:
         logger.warning(f"Could not get document count: {e}")
         doc_count = 0
+    
+    # Phase 2: Include demo queue status in health check
+    try:
+        queue_length = await chatbot_service.get_current_queue_length() if chatbot_service else 0
+    except Exception as e:
+        logger.warning(f"Could not get demo queue length: {e}")
+        queue_length = 0
     
     return HealthResponse(
         status="healthy",
@@ -700,17 +1289,53 @@ async def api_status() -> Dict[str, str]:
     """API status endpoint"""
     try:
         doc_count = chatbot_service.get_document_count() if chatbot_service else 0
+        queue_count = await chatbot_service.get_current_queue_length() if chatbot_service else 0
     except Exception as e:
-        logger.warning(f"Could not get document count for status: {e}")
+        logger.warning(f"Could not get document/queue count for status: {e}")
         doc_count = 0
+        queue_count = 0
     
     return {
         "api_version": "v1",
         "status": "active",
-        "message": "Multi-agent backend ready for chat interactions",
+        "message": "Multi-agent backend with Phase 3 demo queue ready",
         "document_count": doc_count,
-        "agents": ["supervisor", "demo_agent", "contact_agent", "technical_agent", "business_agent"]
+        "demo_queue_length": queue_count,
+        "agents": ["supervisor", "demo_agent", "contact_agent", "technical_agent", "business_agent"],
+        "features": ["natural_demo_signup", "queue_management", "user_info_extraction", "conversation_flow"]
     }
+
+# Phase 2: Demo Queue API Endpoints
+@app.get("/api/v1/demo/queue-status")
+async def get_demo_queue_status() -> Dict:
+    """Get current demo queue status"""
+    try:
+        queue_length = await chatbot_service.get_current_queue_length()
+        estimated_wait = await chatbot_service.estimate_wait_time()
+        
+        return {
+            "queue_length": queue_length,
+            "estimated_wait_time_minutes": estimated_wait,
+            "status": "active"
+        }
+    except Exception as e:
+        logger.error(f"Error getting queue status: {e}")
+        return {
+            "queue_length": 0,
+            "estimated_wait_time_minutes": 0,
+            "status": "error",
+            "error": str(e)
+        }
+
+@app.get("/api/v1/demo/queue/{session_id}")
+async def get_user_queue_status(session_id: str) -> Dict:
+    """Get queue status for specific user session"""
+    try:
+        status = await chatbot_service.get_queue_status(session_id)
+        return status
+    except Exception as e:
+        logger.error(f"Error getting user queue status: {e}")
+        return {"success": False, "error": str(e)}
 
 @app.post("/api/v1/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest) -> ChatResponse:
