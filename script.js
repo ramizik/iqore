@@ -24,10 +24,9 @@ document.addEventListener('DOMContentLoaded', function() {
 // Initial suggestions when chat starts
 function showInitialSuggestions() {
     const initialSuggestions = [
-        "What is iQore's quantum computing technology?",
-        "How does hybrid quantum-classical computing work?",
-        "Tell me about iQore's architecture",
-        "What are the main applications of iQore's solutions?"
+        "What is iQore?",
+        "What can you do?",
+        "I want see the demo."
     ];
     updateSuggestions(initialSuggestions);
 }
@@ -37,17 +36,11 @@ function generateContextualSuggestions(lastAiMessage) {
     // Simple keyword-based suggestion generation
     const message = lastAiMessage.toLowerCase();
     
-    if (message.includes('quantum') || message.includes('qubit')) {
+    if (message.includes('contact') || message.includes('meeting')) {
         return [
-            "How many qubits does iQore support?",
-            "What quantum algorithms does iQore implement?",
-            "Tell me more about quantum advantage"
-        ];
-    } else if (message.includes('architecture') || message.includes('infrastructure')) {
-        return [
-            "How does iQore's software stack work?",
-            "What about scalability and performance?",
-            "Can you explain the execution layers?"
+            "Schedule a call with iQore",
+            "I have more questions about iQore",
+            "I want to talk someone from iQore"
         ];
     } else if (message.includes('application') || message.includes('use case')) {
         return [
@@ -55,11 +48,11 @@ function generateContextualSuggestions(lastAiMessage) {
             "Show me specific use cases",
             "How does this compare to classical computing?"
         ];
-    } else if (message.includes('demo') || message.includes('meeting')) {
+    } else if (message.includes('demo') || message.includes('demonstration')) {
         return [
-            "What should I prepare for a demo?",
-            "How long does a typical demo take?",
-            "What technical requirements are needed?"
+            "What is demo about?",
+            "Show me the demo!",
+            "What quantum algorithms does iQore work with?"
         ];
     } else {
         // Default contextual suggestions
