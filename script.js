@@ -7,8 +7,6 @@ const CHAT_ENDPOINT = `${API_BASE_URL}/api/v1/chat`;
 let chatHistory = [];
 let isLoading = false;
 let currentSuggestions = [];
-let placeholderIndex = 0;
-let placeholderInterval;
 
 // DOM elements
 const messagesContainer = document.getElementById('messagesContainer');
@@ -20,68 +18,54 @@ const suggestionsContainer = document.getElementById('suggestionsContainer');
 document.addEventListener('DOMContentLoaded', function() {
     console.log('iQore Chatbot Frontend initialized');
     messageInput.focus();
-    showAgentGuidedSuggestions();
-    startPlaceholderRotation();
+    showInitialSuggestions();
 });
 
-// Rotating placeholder hints
-const placeholderHints = [
-    "Ask about our demo, schedule a meeting, or explore quantum tech...",
-    "Try: 'show me demo', 'contact sales', 'what industries'...",
-    "Type 'demo', 'meeting', 'quantum', or 'business' to get started...",
-    "Ask about applications, schedule calls, or see demonstrations..."
-];
-
-function startPlaceholderRotation() {
-    placeholderInterval = setInterval(() => {
-        placeholderIndex = (placeholderIndex + 1) % placeholderHints.length;
-        messageInput.placeholder = placeholderHints[placeholderIndex];
-    }, 4000);
-}
-// Agent-guided suggestions with intent triggers
-function showAgentGuidedSuggestions() {
-    const agentSuggestions = [
-        { text: "Show me the DEMO", agent: "🎬 Demo", tag: "demo" },
-        { text: "Schedule a MEETING with your team", agent: "📞 Contact", tag: "contact" },
-        { text: "What INDUSTRIES benefit from iQore?", agent: "💼 Business", tag: "business" },
-        { text: "How does your QUANTUM technology work?", agent: "🔬 Technical", tag: "technical" }
+// Initial suggestions when chat starts
+function showInitialSuggestions() {
+    const initialSuggestions = [
+        "What is iQore?",
+        "What can I do here?",
+        "I want see the demo"
     ];
-    updateAgentSuggestions(agentSuggestions);
+    updateSuggestions(initialSuggestions);
 }
 
 // Generate contextual suggestions based on the user's message
 function generateContextualSuggestions(userMessage) {
+    // Simple keyword-based suggestion generation
     const message = userMessage.toLowerCase();
     
     if (message.includes('contact') || message.includes('meeting')) {
         return [
-            { text: "Schedule a CALL with your team", agent: "📞 Contact", tag: "contact" },
-            { text: "What's your PRICING model?", agent: "💼 Business", tag: "business" },
-            { text: "Show me technical DOCUMENTATION", agent: "🔬 Technical", tag: "technical" }
+            "Schedule a call with iQore",
+            "I have more questions about iQore",
+            "I want to talk someone from iQore"
         ];
     } else if (message.includes('application') || message.includes('use case')) {
         return [
-            { text: "What INDUSTRIES use quantum computing?", agent: "💼 Business", tag: "business" },
-            { text: "Show me specific USE CASES", agent: "🔬 Technical", tag: "technical" },
-            { text: "Can I see a live DEMO?", agent: "🎬 Demo", tag: "demo" }
+            "What industries benefit from iQore?",
+            "Show me specific use cases",
+            "How does this compare to classical computing?"
         ];
     } else if (message.includes('demo') || message.includes('demonstration')) {
         return [
-            { text: "What ALGORITHMS does iQore support?", agent: "🔬 Technical", tag: "technical" },
-            { text: "Schedule a detailed MEETING", agent: "📞 Contact", tag: "contact" },
-            { text: "What's the BUSINESS value?", agent: "💼 Business", tag: "business" }
+            "What is demo about?",
+            "Show me the demo!",
+            "What quantum algorithms iQore works with?"
         ];
     } else {
+        // Default contextual suggestions
         return [
-            { text: "Can I see the DEMO?", agent: "🎬 Demo", tag: "demo" },
-            { text: "Tell me about QUANTUM computing", agent: "🔬 Technical", tag: "technical" },
-            { text: "What INDUSTRIES do you serve?", agent: "💼 Business", tag: "business" }
+            "Can I see the demo?",
+            "Tell me about iQore",
+            "What can you do?"
         ];
     }
 }
 
-// Update suggestion bubbles with agent indicators
-function updateAgentSuggestions(suggestions) {
+// Update suggestion bubbles
+function updateSuggestions(suggestions) {
     currentSuggestions = suggestions;
     
     // Clear existing suggestions
@@ -97,21 +81,8 @@ function updateAgentSuggestions(suggestions) {
     suggestions.forEach((suggestion, index) => {
         const suggestionBubble = document.createElement('button');
         suggestionBubble.className = 'suggestion-bubble';
-        
-        const suggestionText = document.createElement('span');
-        suggestionText.className = 'suggestion-text';
-        suggestionText.textContent = typeof suggestion === 'string' ? suggestion : suggestion.text;
-        
-        const agentTag = document.createElement('span');
-        agentTag.className = 'agent-tag';
-        agentTag.textContent = typeof suggestion === 'string' ? '' : suggestion.agent;
-        
-        suggestionBubble.appendChild(suggestionText);
-        if (typeof suggestion !== 'string') {
-            suggestionBubble.appendChild(agentTag);
-        }
-        
-        suggestionBubble.onclick = () => handleSuggestionClick(typeof suggestion === 'string' ? suggestion : suggestion.text);
+        suggestionBubble.textContent = suggestion;
+        suggestionBubble.onclick = () => handleSuggestionClick(suggestion);
         
         // Add slight delay for animation
         setTimeout(() => {
@@ -120,59 +91,6 @@ function updateAgentSuggestions(suggestions) {
         
         suggestionsContainer.appendChild(suggestionBubble);
     });
-    
-    // Add help tooltip
-    addHelpTooltip();
-}
-
-// Add help tooltip with agent guide
-function addHelpTooltip() {
-    const helpButton = document.createElement('button');
-    helpButton.className = 'help-tooltip';
-    helpButton.innerHTML = '?';
-    helpButton.title = 'Click to see agent trigger keywords';
-    
-    helpButton.onclick = (e) => {
-        e.stopPropagation();
-        showAgentGuide();
-    };
-    
-    suggestionsContainer.appendChild(helpButton);
-}
-
-// Show agent guide modal
-function showAgentGuide() {
-    const modal = document.createElement('div');
-    modal.className = 'agent-guide-modal';
-    modal.onclick = () => document.body.removeChild(modal);
-    
-    const content = document.createElement('div');
-    content.className = 'agent-guide-content';
-    content.onclick = (e) => e.stopPropagation();
-    
-    content.innerHTML = `
-        <h3>Agent Trigger Keywords</h3>
-        <div class="agent-guide-item">
-            <span class="agent-icon">🎬</span>
-            <strong>Demo Agent:</strong> "demo", "show me", "demonstration"
-        </div>
-        <div class="agent-guide-item">
-            <span class="agent-icon">📞</span>
-            <strong>Contact Agent:</strong> "meeting", "schedule", "contact", "call"
-        </div>
-        <div class="agent-guide-item">
-            <span class="agent-icon">💼</span>
-            <strong>Business Agent:</strong> "industry", "business", "enterprise", "ROI"
-        </div>
-        <div class="agent-guide-item">
-            <span class="agent-icon">🔬</span>
-            <strong>Technical Agent:</strong> "quantum", "technology", "architecture"
-        </div>
-        <button class="close-guide" onclick="document.body.removeChild(this.closest('.agent-guide-modal'))">Got it!</button>
-    `;
-    
-    modal.appendChild(content);
-    document.body.appendChild(modal);
 }
 
 // Handle suggestion bubble click
@@ -242,7 +160,7 @@ async function sendMessage() {
         // Generate and show new contextual suggestions based on user's message
         const newSuggestions = generateContextualSuggestions(message);
         setTimeout(() => {
-            updateAgentSuggestions(newSuggestions);
+            updateSuggestions(newSuggestions);
         }, 500); // Small delay to let user read the response first
         
         // Update chat history
@@ -271,10 +189,10 @@ async function sendMessage() {
         
         // Show general suggestions on error
         setTimeout(() => {
-            updateAgentSuggestions([
-                { text: "Let me try a different QUESTION", agent: "🔬 Technical", tag: "technical" },
-                { text: "What is iQore's main TECHNOLOGY?", agent: "🔬 Technical", tag: "technical" },
-                { text: "How can I CONTACT your team?", agent: "📞 Contact", tag: "contact" }
+            updateSuggestions([
+                "Let me try a different question",
+                "What is iQore's main technology?",
+                "How can I learn more about iQore?"
             ]);
         }, 500);
     } finally {
