@@ -1,0 +1,37 @@
+[build]
+  # Build command (not needed for static site, but required by Netlify)
+  command = "npm run build"
+  
+  # Directory to publish (current directory since files are in root)
+  publish = "."
+  
+  # Ignore backend directory for frontend deployment
+  ignore = "backend/"
+
+[build.environment]
+  # Node.js version for build process
+  NODE_VERSION = "18"
+
+# Handle SPA routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Security headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin" 
+
+[context.production.environment]
+  NODE_ENV = "production"
+
+[context.deploy-preview.environment]
+  NODE_ENV = "production"
+
+[context.branch-deploy.environment]
+  NODE_ENV = "production"
