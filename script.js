@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function showInitialSuggestions() {
     const initialSuggestions = [
         "What is iQore?",
-        "What can you do?",
+        "What can I do here?",
         "I want see the demo"
     ];
     updateSuggestions(initialSuggestions);
@@ -52,14 +52,14 @@ function generateContextualSuggestions(userMessage) {
         return [
             "What is demo about?",
             "Show me the demo!",
-            "What quantum algorithms can iQore work with?"
+            "What quantum algorithms iQore works with?"
         ];
     } else {
         // Default contextual suggestions
         return [
             "Can I see the demo?",
-            "What should I know about iQore?",
-            "What can I do else in this chat?"
+            "Tell me about iQore",
+            "What can you do?"
         ];
     }
 }
