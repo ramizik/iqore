@@ -285,6 +285,7 @@ class ChatbotService:
     def _supervisor_node(self, state: AgentState) -> AgentState:
         """
         Supervisor node that analyzes user intent and routes to appropriate specialist agent
+        Now with conversation context awareness for demo flows
         """
         try:
             # Get the latest message
@@ -298,7 +299,40 @@ class ChatbotService:
                 state["next"] = "END"
                 return state
             
-            # Detect user intent
+            # Phase 3 Fix: Check if user is already in demo conversation flow
+            demo_state = state.get("demo_state", "")
+            previous_agent_messages = [msg for msg in state["messages"] if isinstance(msg, AIMessage)]
+            
+            # If user was recently talking to demo agent, check for demo-related responses
+            if (demo_state or 
+                (previous_agent_messages and 
+                 getattr(previous_agent_messages[-1], 'name', '') == 'demo_agent')):
+                
+                user_message = latest_message.content.lower()
+                
+                # Check for demo signup responses (yes, sure, sign me up, etc.)
+                if self._detect_signup_intent(user_message):
+                    logger.info(f"Supervisor: User responding to demo signup - keeping in demo_agent")
+                    state["user_intent"] = "demo_agent"
+                    state["next"] = "demo_agent"
+                    return state
+                
+                # Check for demo queue status requests
+                if self._detect_queue_status_intent(user_message):
+                    logger.info(f"Supervisor: User asking about queue status - routing to demo_agent")
+                    state["user_intent"] = "demo_agent" 
+                    state["next"] = "demo_agent"
+                    return state
+                
+                # Check for demo-related follow-up questions
+                demo_keywords = ['demo', 'demonstration', 'queue', 'wait', 'signup', 'reserve', 'spot']
+                if any(keyword in user_message for keyword in demo_keywords):
+                    logger.info(f"Supervisor: Demo context detected - continuing with demo_agent")
+                    state["user_intent"] = "demo_agent"
+                    state["next"] = "demo_agent"
+                    return state
+            
+            # Default intent detection for new conversations
             user_intent = self._detect_user_intent(latest_message.content)
             
             # Update state with detected intent
@@ -321,27 +355,31 @@ class ChatbotService:
         """Phase 3: Demo Agent with natural conversation flow and queue management"""
         try:
             latest_message = state["messages"][-1]
+            demo_state = state.get("demo_state", "initial")
+            
+            logger.info(f"Demo agent: Current state='{demo_state}', Processing message: '{latest_message.content[:50]}...'")
             
             # Check if user is asking for queue status and has a session ID
             if (self._detect_queue_status_intent(latest_message.content) and 
                 state.get("demo_session_id")):
-                # User is in queue and asking for status
+                logger.info("Demo agent: User has session ID and asking for queue status")
                 return await self._demo_queue_status_stage(state)
-            
-            # Get current demo state (default to "initial" if not set)
-            demo_state = state.get("demo_state", "initial")
             
             # Route to appropriate stage based on current state
             if demo_state == "initial":
                 return await self._demo_initial_stage(state)
             elif demo_state == "collecting_info":
+                logger.info("Demo agent: In collecting_info state")
                 return await self._demo_collect_info_stage(state)
             elif demo_state == "confirming":
+                logger.info("Demo agent: In confirming state")
                 return await self._demo_confirm_stage(state)
             elif demo_state == "queued":
+                logger.info("Demo agent: In queued state")
                 return await self._demo_queue_status_stage(state)
             else:
                 # Fallback to initial stage
+                logger.info(f"Demo agent: Unknown state '{demo_state}', falling back to initial")
                 return await self._demo_initial_stage(state)
                 
         except Exception as e:
@@ -393,7 +431,10 @@ class ChatbotService:
                 
             else:
                 # Follow-up response - check user intent
-                if self._detect_signup_intent(user_message):
+                signup_detected = self._detect_signup_intent(user_message)
+                logger.info(f"Demo agent: Signup intent detected: {signup_detected} for message: '{user_message}'")
+                
+                if signup_detected:
                     # User wants to sign up - move to info collection
                     current_queue_length = await self.get_current_queue_length()
                     wait_time = await self.estimate_wait_time()
@@ -404,6 +445,9 @@ class ChatbotService:
                         f"To reserve your spot, I'll need your name and email address. What's your name?"
                     )
                     state["demo_state"] = "collecting_info"
+                    
+                    # Log the transition for debugging
+                    logger.info(f"Demo agent: User confirmed signup, moving to collecting_info state")
                     
                 elif self._detect_queue_status_intent(user_message):
                     # User asking about queue - provide general info
@@ -1191,11 +1235,18 @@ class ChatbotService:
     
     def _detect_signup_intent(self, message: str) -> bool:
         """Detect if user wants to sign up for demo"""
-        message_lower = message.lower()
+        message_lower = message.lower().strip()
+        
+        # Direct affirmative responses
+        direct_yes = ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'alright', 'absolutely', 'definitely', 'of course']
+        if any(message_lower == keyword or message_lower.startswith(keyword + ' ') for keyword in direct_yes):
+            return True
+            
+        # Signup-specific phrases
         signup_keywords = [
-            'yes', 'sure', 'sign me up', 'sign up', 'register', 'join', 'add me',
-            'reserve', 'book', 'interested', 'i want', "i'd like", 'count me in',
-            'put me', 'include me', 'absolutely', 'definitely'
+            'sign me up', 'sign up', 'register', 'join', 'add me', 'reserve', 'book', 
+            'interested', 'i want', "i'd like", 'count me in', 'put me', 'include me',
+            'reserve a spot', 'get me signed up', 'add me to', 'put me in'
         ]
         return any(keyword in message_lower for keyword in signup_keywords)
     
