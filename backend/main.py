@@ -3,19 +3,26 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import uvicorn
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Literal, Annotated
 import logging
 import asyncio
 from datetime import datetime
 from contextlib import asynccontextmanager
+import operator
 
 # LangChain imports for OpenAI integration
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage, SystemMessage
+from langchain_core.tools import tool
 from langchain_mongodb import MongoDBAtlasVectorSearch
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
+
+# LangGraph imports for multi-agent system
+from langgraph.graph import StateGraph, END
+from langgraph.prebuilt import ToolExecutor
+from typing_extensions import TypedDict
 
 # MongoDB
 from pymongo import MongoClient
@@ -43,14 +50,24 @@ class HealthResponse(BaseModel):
     document_count: Optional[int] = None
     timestamp: str
 
+# LangGraph State for multi-agent system
+class AgentState(TypedDict):
+    """State shared between all agents in the system"""
+    messages: Annotated[List[BaseMessage], operator.add]
+    next: str  # Which agent to call next
+    user_intent: str  # Detected user intent (demo, contact, technical, business)
+    lead_info: Dict  # Information about potential leads
+    chat_history: List[Dict[str, str]]  # Chat history for context
+
 # Global variables for chatbot
 qa_chain = None
 embeddings = None
 mongo_client = None
+multi_agent_graph = None
 
 class ChatbotService:
     """
-    Service class for handling chatbot functionality
+    Service class for handling chatbot functionality with multi-agent support
     """
     
     def __init__(self):
@@ -59,13 +76,21 @@ class ChatbotService:
         self.mongo_client = None
         self.db = None
         self.pdf_chunks_collection = None
+        self.multi_agent_graph = None
+        self.llm = None
         
     async def initialize(self):
-        """Initialize the chatbot service"""
+        """Initialize the chatbot service with multi-agent system"""
         try:
-            # Initialize OpenAI embeddings
+            # Initialize OpenAI embeddings and LLM
             self.embeddings = OpenAIEmbeddings(
                 model="text-embedding-3-small",
+                openai_api_key=os.getenv('OPENAI_API_KEY')
+            )
+            
+            self.llm = ChatOpenAI(
+                model="gpt-3.5-turbo",
+                temperature=0.7,
                 openai_api_key=os.getenv('OPENAI_API_KEY')
             )
             
@@ -85,11 +110,26 @@ class ChatbotService:
             # Check if there are documents in the collection
             doc_count = self.pdf_chunks_collection.count_documents({})
             if doc_count == 0:
-                logger.warning("No documents found in database. Chatbot will work but without document context.")
-                return False
+                logger.warning("No documents found in database. Technical agent will work with limited context.")
                 
             logger.info(f"Found {doc_count} document chunks in database")
             
+            # Initialize the traditional RAG chain for technical agent
+            await self._initialize_rag_chain()
+            
+            # Initialize multi-agent system
+            await self._initialize_multi_agent_system()
+            
+            logger.info("✅ Multi-agent chatbot service initialized successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error initializing chatbot service: {e}")
+            return False
+    
+    async def _initialize_rag_chain(self):
+        """Initialize the traditional RAG chain for technical questions"""
+        try:
             # Set up MongoDB Atlas Vector Search
             vector_store = MongoDBAtlasVectorSearch.from_connection_string(
                 connection_string=os.getenv("MONGODB_URI"),
@@ -106,16 +146,7 @@ class ChatbotService:
                 search_kwargs={"k": 5}
             )
             
-            # Set up ChatOpenAI LLM
-            llm = ChatOpenAI(
-                model="gpt-3.5-turbo",
-                temperature=0.7,
-                openai_api_key=os.getenv('OPENAI_API_KEY')
-            )
-            
-            # Modern LangChain LCEL implementation (replaces deprecated ConversationalRetrievalChain)
-            
-            # Step 1: Create history-aware retriever that can rephrase questions based on chat history
+            # History-aware retriever setup
             condense_question_system_template = (
                 "Given a chat history and the latest user question "
                 "which might reference context in the chat history, "
@@ -131,89 +162,377 @@ class ChatbotService:
             ])
             
             history_aware_retriever = create_history_aware_retriever(
-                llm, retriever, condense_question_prompt
+                self.llm, retriever, condense_question_prompt
             )
             
-            # Step 2: Create the question-answering chain
-            system_prompt = (
-                "You are an AI business assistant for iQore operating at their booth during a quantum computing "
-                "convention. You work alongside human iQore representatives to engage with visitors who have "
-                "limited time and basic-to-intermediate quantum computing knowledge.\n\n"
-                "**Your Environment & Context:**\n"
-                "- You're at a busy convention booth with time-constrained visitors\n"
-                "- Visitors range from curious attendees to potential enterprise clients\n"
-                "- Most have some quantum background but aren't experts\n"
-                "- Your human colleagues handle in-depth technical discussions and demos\n\n"
-                "**About iQore:**\n"
-                "iQore pioneered quantum-classical hybrid compute infrastructure with software-native, "
-                "platform-agnostic execution layers: iQD (quantum emulator) and iCD (classical compute "
-                "distribution). These accelerate enterprise AI and simulation workloads by bridging quantum "
-                "and classical computing seamlessly.\n\n"
-                "**Your Communication Style:**\n"
-                "- Keep responses SHORT and CONCISE (2-3 sentences max for most questions)\n"
-                "- Use accessible language - avoid heavy jargon unless specifically asked\n"
-                "- Be enthusiastic and business-focused, highlighting real-world value\n"
-                "- Act as a knowledgeable business representative, not just a technical resource\n\n"
-                "**Your Primary Goals:**\n"
-                "1. **Spark Interest**: Generate excitement about iQore's unique approach\n"
-                "2. **Qualify Leads**: Identify promising prospects for follow-up\n"
-                "3. **Direct to Humans**: Guide interested visitors to speak with booth staff for demos/deep dives\n"
-                "4. **Capture Leads**: Encourage contact info sharing and meeting requests\n\n"
-                "**Key Actions to Promote:**\n"
-                "- 'Would you like to see our live demo with one of our engineers?'\n"
-                "- 'Let me connect you with our technical team for a deeper discussion'\n"
-                "- 'I can help schedule a follow-up call to explore how this applies to your use case'\n"
-                "- 'Our team can show you specific performance benchmarks relevant to your industry'\n\n"
-                "Use the retrieved context from official iQore documents to answer accurately, but keep "
-                "responses concise and visitor-friendly. If you don't know something, direct them to the "
-                "human experts at the booth.\n\n"
-                "{context}"
+            # QA chain setup
+            technical_system_prompt = (
+                "You are the Technical Expert for iQore at a quantum computing convention booth. "
+                "You specialize in explaining iQore's quantum-classical hybrid compute infrastructure, "
+                "including iQD (quantum emulator) and iCD (classical compute distribution) technologies.\n\n"
+                "Keep responses technical but accessible, 2-3 sentences max. Focus on:\n"
+                "- Architecture details\n"
+                "- Performance capabilities\n" 
+                "- Use cases and applications\n"
+                "- Technical comparisons\n\n"
+                "Use the following context to answer accurately:\n{context}"
             )
             
             qa_prompt = ChatPromptTemplate.from_messages([
-                ("system", system_prompt),
+                ("system", technical_system_prompt),
                 ("placeholder", "{chat_history}"),
                 ("human", "{input}"),
             ])
             
-            qa_chain = create_stuff_documents_chain(llm, qa_prompt)
-            
-            # Step 3: Combine retriever and QA chain
+            qa_chain = create_stuff_documents_chain(self.llm, qa_prompt)
             self.qa_chain = create_retrieval_chain(history_aware_retriever, qa_chain)
             
-            logger.info("✅ Modern LCEL QA chain initialized successfully")
-            
-            logger.info("Chatbot service initialized successfully")
-            return True
+            logger.info("✅ RAG chain for technical agent initialized")
             
         except Exception as e:
-            logger.error(f"Error initializing chatbot service: {e}")
-            return False
+            logger.error(f"Error initializing RAG chain: {e}")
+            self.qa_chain = None
+    
+    async def _initialize_multi_agent_system(self):
+        """Initialize the LangGraph multi-agent system with supervisor pattern"""
+        try:
+            # Create the workflow graph
+            workflow = StateGraph(AgentState)
+            
+            # Add nodes for each agent
+            workflow.add_node("supervisor", self._supervisor_node)
+            workflow.add_node("demo_agent", self._demo_agent_node)
+            workflow.add_node("contact_agent", self._contact_agent_node)
+            workflow.add_node("technical_agent", self._technical_agent_node)
+            workflow.add_node("business_agent", self._business_agent_node)
+            
+            # Add edges - supervisor routes to appropriate agents
+            workflow.add_conditional_edges(
+                "supervisor",
+                self._should_continue,
+                {
+                    "demo_agent": "demo_agent",
+                    "contact_agent": "contact_agent", 
+                    "technical_agent": "technical_agent",
+                    "business_agent": "business_agent",
+                    "END": END,
+                }
+            )
+            
+            # All agents return to supervisor for potential follow-up routing
+            workflow.add_edge("demo_agent", "supervisor")
+            workflow.add_edge("contact_agent", "supervisor") 
+            workflow.add_edge("technical_agent", "supervisor")
+            workflow.add_edge("business_agent", "supervisor")
+            
+            # Set entry point
+            workflow.set_entry_point("supervisor")
+            
+            # Compile the graph
+            self.multi_agent_graph = workflow.compile()
+            
+            logger.info("✅ Multi-agent system initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Error initializing multi-agent system: {e}")
+            self.multi_agent_graph = None
+    
+    def _detect_user_intent(self, message: str) -> str:
+        """
+        Analyze user message to determine intent and route to appropriate agent
+        Enhanced version of frontend's generateContextualSuggestions logic
+        """
+        message_lower = message.lower()
+        
+        # Demo intent detection
+        demo_keywords = ['demo', 'demonstration', 'show me', 'see the demo', 'live demo', 'preview']
+        if any(keyword in message_lower for keyword in demo_keywords):
+            return "demo_agent"
+        
+        # Contact/Lead intent detection  
+        contact_keywords = ['contact', 'meeting', 'schedule', 'talk to someone', 'call', 'reach out', 
+                           'speak with', 'connect', 'get in touch', 'sales', 'representative']
+        if any(keyword in message_lower for keyword in contact_keywords):
+            return "contact_agent"
+        
+        # Business intent detection
+        business_keywords = ['industry', 'enterprise', 'partnership', 'roi', 'cost', 'pricing', 
+                           'business case', 'investment', 'market', 'competition', 'solution']
+        if any(keyword in message_lower for keyword in business_keywords):
+            return "business_agent"
+        
+        # Technical intent detection (default for technical questions)
+        technical_keywords = ['what is', 'how does', 'applications', 'technology', 'quantum', 
+                            'classical', 'iqd', 'icd', 'architecture', 'performance', 'algorithm']
+        if any(keyword in message_lower for keyword in technical_keywords):
+            return "technical_agent"
+        
+        # Default to technical agent for general questions
+        return "technical_agent"
+    
+    def _supervisor_node(self, state: AgentState) -> AgentState:
+        """
+        Supervisor node that analyzes user intent and routes to appropriate specialist agent
+        """
+        try:
+            # Get the latest message
+            if not state["messages"]:
+                return state
+                
+            latest_message = state["messages"][-1]
+            
+            # Skip routing if this is not a user message
+            if not isinstance(latest_message, HumanMessage):
+                state["next"] = "END"
+                return state
+            
+            # Detect user intent
+            user_intent = self._detect_user_intent(latest_message.content)
+            
+            # Update state with detected intent
+            state["user_intent"] = user_intent
+            state["next"] = user_intent
+            
+            logger.info(f"Supervisor routing to: {user_intent}")
+            return state
+            
+        except Exception as e:
+            logger.error(f"Error in supervisor node: {e}")
+            state["next"] = "technical_agent"  # Fallback to technical agent
+            return state
+    
+    def _should_continue(self, state: AgentState) -> str:
+        """Determine which agent to call next based on supervisor decision"""
+        return state.get("next", "END")
+    
+    def _demo_agent_node(self, state: AgentState) -> AgentState:
+        """Demo Agent - Handles demo requests and product demonstrations"""
+        try:
+            demo_prompt = ChatPromptTemplate.from_messages([
+                ("system", 
+                 "You are the Demo Specialist for iQore at a quantum convention booth. "
+                 "Your role is to:\n"
+                 "- Explain what our live demo showcases\n" 
+                 "- Schedule demo sessions with booth engineers\n"
+                 "- Highlight key demo features and capabilities\n"
+                 "- Guide visitors to hands-on experiences\n\n"
+                 "Keep responses enthusiastic and action-oriented, 2-3 sentences max. "
+                 "Always encourage visitors to see the live demo with our technical team."),
+                ("human", "{input}")
+            ])
+            
+            latest_message = state["messages"][-1]
+            formatted_prompt = demo_prompt.format_messages(input=latest_message.content)
+            response = self.llm.invoke(formatted_prompt)
+            
+            # Add agent response to messages
+            agent_message = AIMessage(
+                content=response.content,
+                name="demo_agent"
+            )
+            state["messages"].append(agent_message)
+            state["next"] = "END"  # Demo agent completes the interaction
+            
+            return state
+            
+        except Exception as e:
+            logger.error(f"Error in demo agent: {e}")
+            error_message = AIMessage(
+                content="I'd love to show you our demo! Let me connect you with our technical team at the booth for a hands-on demonstration.",
+                name="demo_agent"
+            )
+            state["messages"].append(error_message)
+            state["next"] = "END"
+            return state
+    
+    def _contact_agent_node(self, state: AgentState) -> AgentState:
+        """Contact Agent - Handles lead capture and meeting scheduling"""
+        try:
+            contact_prompt = ChatPromptTemplate.from_messages([
+                ("system",
+                 "You are the Business Development Representative for iQore at a quantum convention booth. "
+                 "Your role is to:\n"
+                 "- Capture lead information\n"
+                 "- Schedule follow-up meetings\n" 
+                 "- Connect visitors with appropriate team members\n"
+                 "- Qualify business interest and needs\n\n"
+                 "Keep responses professional and helpful, 2-3 sentences max. "
+                 "Ask for contact information when appropriate and offer to schedule meetings."),
+                ("human", "{input}")
+            ])
+            
+            latest_message = state["messages"][-1]
+            formatted_prompt = contact_prompt.format_messages(input=latest_message.content)
+            response = self.llm.invoke(formatted_prompt)
+            
+            # Add agent response to messages
+            agent_message = AIMessage(
+                content=response.content,
+                name="contact_agent"
+            )
+            state["messages"].append(agent_message)
+            state["next"] = "END"  # Contact agent completes the interaction
+            
+            return state
+            
+        except Exception as e:
+            logger.error(f"Error in contact agent: {e}")
+            error_message = AIMessage(
+                content="I'd be happy to connect you with our team! Please share your contact information and I'll arrange a meeting with our specialists.",
+                name="contact_agent"
+            )
+            state["messages"].append(error_message)
+            state["next"] = "END"
+            return state
+    
+    def _technical_agent_node(self, state: AgentState) -> AgentState:
+        """Technical Agent - Uses existing RAG system for detailed technical questions"""
+        try:
+            latest_message = state["messages"][-1]
+            
+            # Convert LangGraph messages to format expected by RAG chain
+            chat_history = []
+            for msg in state["messages"][:-1]:  # Exclude current message
+                if isinstance(msg, HumanMessage):
+                    chat_history.append({"user": msg.content, "assistant": ""})
+                elif isinstance(msg, AIMessage) and chat_history:
+                    chat_history[-1]["assistant"] = msg.content
+            
+            # Use existing RAG chain if available
+            if self.qa_chain:
+                langchain_history = []
+                for item in chat_history:
+                    if item["user"] and item["assistant"]:
+                        langchain_history.append(HumanMessage(content=item["user"]))
+                        langchain_history.append(AIMessage(content=item["assistant"]))
+                
+                result = self.qa_chain.invoke({
+                    "input": latest_message.content,
+                    "chat_history": langchain_history
+                })
+                response_content = result["answer"]
+            else:
+                # Fallback if RAG chain is not available
+                technical_prompt = ChatPromptTemplate.from_messages([
+                    ("system",
+                     "You are the Technical Expert for iQore at a quantum convention booth. "
+                     "Explain iQore's quantum-classical hybrid technology in accessible terms. "
+                     "Keep responses technical but clear, 2-3 sentences max."),
+                    ("human", "{input}")
+                ])
+                
+                formatted_prompt = technical_prompt.format_messages(input=latest_message.content)
+                response = self.llm.invoke(formatted_prompt)
+                response_content = response.content
+            
+            # Add agent response to messages
+            agent_message = AIMessage(
+                content=response_content,
+                name="technical_agent"
+            )
+            state["messages"].append(agent_message)
+            state["next"] = "END"  # Technical agent completes the interaction
+            
+            return state
+            
+        except Exception as e:
+            logger.error(f"Error in technical agent: {e}")
+            error_message = AIMessage(
+                content="I'm here to answer technical questions about iQore's quantum-classical hybrid technology. Could you ask me something specific about our architecture or capabilities?",
+                name="technical_agent"
+            )
+            state["messages"].append(error_message)
+            state["next"] = "END"
+            return state
+    
+    def _business_agent_node(self, state: AgentState) -> AgentState:
+        """Business Agent - Handles business cases, industry applications, and ROI discussions"""
+        try:
+            business_prompt = ChatPromptTemplate.from_messages([
+                ("system",
+                 "You are the Business Solutions Expert for iQore at a quantum convention booth. "
+                 "Your role is to:\n"
+                 "- Discuss industry-specific applications\n"
+                 "- Explain business value and ROI\n"
+                 "- Address enterprise needs and use cases\n"
+                 "- Connect solutions to business outcomes\n\n"
+                 "Keep responses business-focused and value-oriented, 2-3 sentences max. "
+                 "Highlight competitive advantages and real-world impact."),
+                ("human", "{input}")
+            ])
+            
+            latest_message = state["messages"][-1]
+            formatted_prompt = business_prompt.format_messages(input=latest_message.content)
+            response = self.llm.invoke(formatted_prompt)
+            
+            # Add agent response to messages
+            agent_message = AIMessage(
+                content=response.content,
+                name="business_agent"
+            )
+            state["messages"].append(agent_message)
+            state["next"] = "END"  # Business agent completes the interaction
+            
+            return state
+            
+        except Exception as e:
+            logger.error(f"Error in business agent: {e}")
+            error_message = AIMessage(
+                content="I can help you understand how iQore delivers business value across industries. What specific use case or business challenge interests you?",
+                name="business_agent"
+            )
+            state["messages"].append(error_message)
+            state["next"] = "END"
+            return state
     
     async def get_response(self, message: str, chat_history: List[Dict[str, str]]) -> Dict:
-        """Get response from the chatbot"""
-        if not self.qa_chain:
+        """Get response from the multi-agent system"""
+        try:
+            # Use multi-agent system if available, fallback to traditional approach
+            if self.multi_agent_graph:
+                return await self._get_multi_agent_response(message, chat_history)
+            else:
+                # Fallback to single-agent RAG system
+                return await self._get_traditional_response(message, chat_history)
+                
+        except Exception as e:
+            logger.error(f"Error getting response: {e}")
             return {
-                "response": "I'm sorry, but the chatbot service is not properly initialized. Please contact support.",
+                "response": "I'm sorry, but I encountered an error while processing your request. Please try again.",
                 "chat_history": chat_history
             }
-        
+    
+    async def _get_multi_agent_response(self, message: str, chat_history: List[Dict[str, str]]) -> Dict:
+        """Get response using the multi-agent system"""
         try:
-            # Convert chat_history to the format expected by modern LCEL chains
-            langchain_history = []
+            # Convert chat history to LangGraph format
+            messages = []
             for item in chat_history:
                 if "user" in item and "assistant" in item:
-                    langchain_history.append(HumanMessage(content=item["user"]))
-                    langchain_history.append(AIMessage(content=item["assistant"]))
+                    messages.append(HumanMessage(content=item["user"]))
+                    messages.append(AIMessage(content=item["assistant"]))
             
-            # Invoke the modern LCEL chain
-            result = self.qa_chain.invoke({
-                "input": message, 
-                "chat_history": langchain_history
-            })
+            # Add current user message
+            messages.append(HumanMessage(content=message))
             
-            response = result["answer"]
-            # Sources removed as per user request - no longer displayed in frontend
+            # Create initial state
+            initial_state = AgentState(
+                messages=messages,
+                next="",
+                user_intent="",
+                lead_info={},
+                chat_history=chat_history
+            )
+            
+            # Run the multi-agent workflow
+            final_state = self.multi_agent_graph.invoke(initial_state)
+            
+            # Extract the final AI response
+            ai_messages = [msg for msg in final_state["messages"] if isinstance(msg, AIMessage)]
+            if ai_messages:
+                response = ai_messages[-1].content
+            else:
+                response = "I'm here to help you learn about iQore. What would you like to know?"
             
             # Update chat history
             updated_history = chat_history.copy()
@@ -229,7 +548,49 @@ class ChatbotService:
             }
             
         except Exception as e:
-            logger.error(f"Error getting chatbot response: {e}")
+            logger.error(f"Error in multi-agent response: {e}")
+            # Fallback to traditional response
+            return await self._get_traditional_response(message, chat_history)
+    
+    async def _get_traditional_response(self, message: str, chat_history: List[Dict[str, str]]) -> Dict:
+        """Fallback to traditional single-agent RAG response"""
+        if not self.qa_chain:
+            return {
+                "response": "I'm sorry, but the chatbot service is not properly initialized. Please contact support.",
+                "chat_history": chat_history
+            }
+        
+        try:
+            # Convert chat_history to the format expected by RAG chain
+            langchain_history = []
+            for item in chat_history:
+                if "user" in item and "assistant" in item:
+                    langchain_history.append(HumanMessage(content=item["user"]))
+                    langchain_history.append(AIMessage(content=item["assistant"]))
+            
+            # Invoke the RAG chain
+            result = self.qa_chain.invoke({
+                "input": message, 
+                "chat_history": langchain_history
+            })
+            
+            response = result["answer"]
+            
+            # Update chat history
+            updated_history = chat_history.copy()
+            updated_history.append({"user": message, "assistant": response})
+            
+            # Limit chat history to last 10 exchanges
+            if len(updated_history) > 10:
+                updated_history = updated_history[-10:]
+            
+            return {
+                "response": response,
+                "chat_history": updated_history
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting traditional response: {e}")
             return {
                 "response": "I'm sorry, but I encountered an error while processing your request. Please try again.",
                 "chat_history": chat_history
@@ -253,13 +614,13 @@ chatbot_service = ChatbotService()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    logger.info("Starting iQore Chatbot Backend...")
+    logger.info("Starting iQore Multi-Agent Chatbot Backend...")
     try:
         success = await chatbot_service.initialize()
         if success:
-            logger.info("✅ Chatbot service initialized successfully")
+            logger.info("✅ Multi-agent chatbot service initialized successfully")
         else:
-            logger.warning("⚠️ Chatbot service initialized but no documents found in database")
+            logger.warning("⚠️ Chatbot service initialized but with limited functionality")
     except Exception as e:
         logger.error(f"⚠️ Failed to initialize chatbot service: {e}")
         logger.info("🔄 Server will continue running, but chatbot functionality may be limited")
@@ -268,9 +629,9 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     chatbot_service.close_connections()
-    logger.info("Chatbot backend shutdown complete")
+    logger.info("Multi-agent chatbot backend shutdown complete")
 
-app = FastAPI(title="iQore Chatbot Backend", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="iQore Multi-Agent Chatbot Backend", version="2.0.0", lifespan=lifespan)
 
 # Add CORS middleware
 app.add_middleware(
@@ -285,9 +646,10 @@ app.add_middleware(
 async def root() -> Dict[str, str]:
     """Root endpoint"""
     return {
-        "message": "iQore Chatbot Backend is running",
+        "message": "iQore Multi-Agent Chatbot Backend is running",
         "status": "healthy",
-        "version": "1.0.0",
+        "version": "2.0.0",
+        "agents": ["supervisor", "demo_agent", "contact_agent", "technical_agent", "business_agent"],
         "port": str(os.environ.get("PORT", "8080"))
     }
 
@@ -302,7 +664,7 @@ async def health_check() -> HealthResponse:
     
     return HealthResponse(
         status="healthy",
-        service="iqore-chatbot-backend",
+        service="iqore-multi-agent-chatbot-backend",
         document_count=doc_count,
         timestamp=datetime.utcnow().isoformat()
     )
@@ -319,14 +681,15 @@ async def api_status() -> Dict[str, str]:
     return {
         "api_version": "v1",
         "status": "active",
-        "message": "Backend ready for chat interactions",
-        "document_count": doc_count
+        "message": "Multi-agent backend ready for chat interactions",
+        "document_count": doc_count,
+        "agents": ["supervisor", "demo_agent", "contact_agent", "technical_agent", "business_agent"]
     }
 
 @app.post("/api/v1/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest) -> ChatResponse:
     """
-    Main chat endpoint for processing user messages
+    Main chat endpoint for processing user messages through multi-agent system
     """
     try:
         logger.info(f"Received chat request: {request.message[:50]}...")
@@ -338,7 +701,7 @@ async def chat_endpoint(request: ChatRequest) -> ChatResponse:
             chat_history=result["chat_history"]
         )
         
-        logger.info(f"Chat response sent successfully")
+        logger.info(f"Multi-agent chat response sent successfully")
         return response
         
     except Exception as e:
@@ -353,9 +716,10 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     
     # Log startup information
-    logger.info(f"🚀 Starting iQore Chatbot Backend on 0.0.0.0:{port}")
+    logger.info(f"🚀 Starting iQore Multi-Agent Chatbot Backend on 0.0.0.0:{port}")
     logger.info(f"📊 Environment: {os.environ.get('GAE_ENV', 'local')}")
     logger.info(f"🔧 Port: {port}")
+    logger.info(f"🤖 Agents: supervisor, demo_agent, contact_agent, technical_agent, business_agent")
     
     # Start the server with explicit configuration for Google Cloud Run
     uvicorn.run(
