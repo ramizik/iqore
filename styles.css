@@ -251,7 +251,12 @@ body {
     min-width: fit-content;
     text-align: center;
     line-height: 1.2;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-direction: column;
+    white-space: normal;
+    padding: 10px 16px;
 }
 
 .suggestion-bubble.visible {
@@ -271,6 +276,105 @@ body {
     box-shadow: 0 2px 8px rgba(139, 69, 255, 0.3);
 }
 
+.suggestion-text {
+    font-weight: 500;
+}
+
+.agent-tag {
+    font-size: 11px;
+    opacity: 0.8;
+    font-weight: 400;
+    margin-top: 2px;
+}
+
+/* Help Tooltip */
+.help-tooltip {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(139, 69, 255, 0.2);
+    border: 1px solid rgba(139, 69, 255, 0.4);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    margin-left: 8px;
+}
+
+.help-tooltip:hover {
+    background: rgba(139, 69, 255, 0.3);
+    transform: scale(1.1);
+}
+
+/* Agent Guide Modal */
+.agent-guide-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+}
+
+.agent-guide-content {
+    background: linear-gradient(135deg, #2d1b69 0%, #1a0b2e 100%);
+    border: 1px solid rgba(139, 69, 255, 0.3);
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    color: white;
+}
+
+.agent-guide-content h3 {
+    margin-bottom: 16px;
+    color: #8b45ff;
+    text-align: center;
+    font-size: 18px;
+}
+
+.agent-guide-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 8px;
+    background: rgba(139, 69, 255, 0.1);
+    border-radius: 8px;
+}
+
+.agent-icon {
+    font-size: 16px;
+    width: 24px;
+    text-align: center;
+}
+
+.close-guide {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #8b45ff 0%, #6b2fb5 100%);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 16px;
+    transition: all 0.3s ease;
+}
+
+.close-guide:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(139, 69, 255, 0.3);
+}
 .input-container {
     position: relative;
     display: flex;
