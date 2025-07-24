@@ -14,14 +14,12 @@ import operator
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage, SystemMessage
-from langchain_core.tools import tool
 from langchain_mongodb import MongoDBAtlasVectorSearch
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
 # LangGraph imports for multi-agent system
 from langgraph.graph import StateGraph, END
-from langgraph.prebuilt import ToolExecutor
 from typing_extensions import TypedDict
 
 # MongoDB

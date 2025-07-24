@@ -9,7 +9,7 @@ langchain-mongodb
 langchain-openai
 
 # LangGraph for multi-agent systems
-langgraph
+langgraph>=0.2.0
 langgraph-checkpoint
 langgraph-checkpoint-sqlite
 
