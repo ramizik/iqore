@@ -26,15 +26,15 @@ function showInitialSuggestions() {
     const initialSuggestions = [
         "What is iQore?",
         "What can you do?",
-        "I want see the demo."
+        "I want see the demo"
     ];
     updateSuggestions(initialSuggestions);
 }
 
-// Generate contextual suggestions based on the last AI response
-function generateContextualSuggestions(lastAiMessage) {
+// Generate contextual suggestions based on the user's message
+function generateContextualSuggestions(userMessage) {
     // Simple keyword-based suggestion generation
-    const message = lastAiMessage.toLowerCase();
+    const message = userMessage.toLowerCase();
     
     if (message.includes('contact') || message.includes('meeting')) {
         return [
@@ -52,14 +52,14 @@ function generateContextualSuggestions(lastAiMessage) {
         return [
             "What is demo about?",
             "Show me the demo!",
-            "What quantum algorithms does iQore work with?"
+            "What quantum algorithms can iQore work with?"
         ];
     } else {
         // Default contextual suggestions
         return [
-            "Can you give me a specific example?",
-            "How does this benefit enterprises?",
-            "What's the next step to learn more?"
+            "Can I see the demo?",
+            "What should I know about iQore?",
+            "What can I do else in this chat?"
         ];
     }
 }
@@ -157,8 +157,8 @@ async function sendMessage() {
         // Add AI response to chat
         addMessage(data.response, 'ai');
         
-        // Generate and show new contextual suggestions
-        const newSuggestions = generateContextualSuggestions(data.response);
+        // Generate and show new contextual suggestions based on user's message
+        const newSuggestions = generateContextualSuggestions(message);
         setTimeout(() => {
             updateSuggestions(newSuggestions);
         }, 500); // Small delay to let user read the response first
