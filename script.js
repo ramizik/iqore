@@ -6,18 +6,102 @@ const CHAT_ENDPOINT = `${API_BASE_URL}/api/v1/chat`;
 // Global state
 let chatHistory = [];
 let isLoading = false;
+let currentSuggestions = [];
 
 // DOM elements
 const messagesContainer = document.getElementById('messagesContainer');
 const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
+const suggestionsContainer = document.getElementById('suggestionsContainer');
 
 // Initialize the chat interface
 document.addEventListener('DOMContentLoaded', function() {
     console.log('iQore Chatbot Frontend initialized');
     messageInput.focus();
+    showInitialSuggestions();
 });
 
+// Initial suggestions when chat starts
+function showInitialSuggestions() {
+    const initialSuggestions = [
+        "What is iQore?",
+        "What can I do here?",
+        "I want see the demo"
+    ];
+    updateSuggestions(initialSuggestions);
+}
+
+// Generate contextual suggestions based on the user's message
+function generateContextualSuggestions(userMessage) {
+    // Simple keyword-based suggestion generation
+    const message = userMessage.toLowerCase();
+    
+    if (message.includes('contact') || message.includes('meeting')) {
+        return [
+            "Schedule a call with iQore",
+            "I have more questions about iQore",
+            "I want to talk someone from iQore"
+        ];
+    } else if (message.includes('application') || message.includes('use case')) {
+        return [
+            "What industries benefit from iQore?",
+            "Show me specific use cases",
+            "How does this compare to classical computing?"
+        ];
+    } else if (message.includes('demo') || message.includes('demonstration')) {
+        return [
+            "What is demo about?",
+            "Show me the demo!",
+            "What quantum algorithms iQore works with?"
+        ];
+    } else {
+        // Default contextual suggestions
+        return [
+            "Can I see the demo?",
+            "Tell me about iQore",
+            "What can you do?"
+        ];
+    }
+}
+
+// Update suggestion bubbles
+function updateSuggestions(suggestions) {
+    currentSuggestions = suggestions;
+    
+    // Clear existing suggestions
+    suggestionsContainer.innerHTML = '';
+    
+    if (suggestions.length === 0) {
+        suggestionsContainer.style.display = 'none';
+        return;
+    }
+    
+    suggestionsContainer.style.display = 'flex';
+    
+    suggestions.forEach((suggestion, index) => {
+        const suggestionBubble = document.createElement('button');
+        suggestionBubble.className = 'suggestion-bubble';
+        suggestionBubble.textContent = suggestion;
+        suggestionBubble.onclick = () => handleSuggestionClick(suggestion);
+        
+        // Add slight delay for animation
+        setTimeout(() => {
+            suggestionBubble.classList.add('visible');
+        }, index * 100);
+        
+        suggestionsContainer.appendChild(suggestionBubble);
+    });
+}
+
+// Handle suggestion bubble click
+function handleSuggestionClick(suggestion) {
+    // Set the input value and send the message
+    messageInput.value = suggestion;
+    sendMessage();
+    
+    // Hide suggestions temporarily while processing
+    suggestionsContainer.style.display = 'none';
+}
 // Removed backend health check display as per user request
 
 // Handle Enter key press in input field
@@ -73,6 +157,12 @@ async function sendMessage() {
         // Add AI response to chat
         addMessage(data.response, 'ai');
         
+        // Generate and show new contextual suggestions based on user's message
+        const newSuggestions = generateContextualSuggestions(message);
+        setTimeout(() => {
+            updateSuggestions(newSuggestions);
+        }, 500); // Small delay to let user read the response first
+        
         // Update chat history
         chatHistory = data.chat_history || [];
         
@@ -96,6 +186,15 @@ async function sendMessage() {
         }
         
         addMessage(errorMessage, 'ai');
+        
+        // Show general suggestions on error
+        setTimeout(() => {
+            updateSuggestions([
+                "Let me try a different question",
+                "What is iQore's main technology?",
+                "How can I learn more about iQore?"
+            ]);
+        }, 500);
     } finally {
         setLoading(false);
         messageInput.focus();
@@ -212,6 +311,11 @@ function setLoading(loading) {
     isLoading = loading;
     sendButton.disabled = loading;
     messageInput.disabled = loading;
+    
+    // Hide suggestions while loading
+    if (loading) {
+        suggestionsContainer.style.display = 'none';
+    }
     
     if (loading) {
         sendButton.style.opacity = '0.5';
