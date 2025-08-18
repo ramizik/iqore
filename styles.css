@@ -18,6 +18,7 @@ body {
     position: absolute;
     top: 20px;
     left: 50%;
+    transform: translateX(-5%);
     z-index: 10;
     width: 800px;
     display: flex;
