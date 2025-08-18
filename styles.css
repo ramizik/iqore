@@ -21,7 +21,6 @@ body {
     transform: translateX(-50%);
     z-index: 10;
     width: 800px;
-    max-width: calc(100vw - 40px);
     display: flex;
     justify-content: center;
     align-items: center;
