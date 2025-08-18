@@ -545,8 +545,9 @@ class ChatbotService:
         """
         message_lower = message.lower()
         
-        # Demo intent detection
-        demo_keywords = ['demo', 'demonstration', 'show me', 'see the demo', 'live demo', 'preview']
+        # Demo intent detection - enhanced for on-site demo mentions
+        demo_keywords = ['demo', 'demonstration', 'show me', 'see the demo', 'live demo', 'preview', 
+                        'queue', 'line', 'wait', 'on-site', 'booth', 'laptop']
         if any(keyword in message_lower for keyword in demo_keywords):
             return "demo_agent"
         
@@ -574,7 +575,7 @@ class ChatbotService:
     def _supervisor_node(self, state: AgentState) -> AgentState:
         """
         Supervisor node that analyzes user intent and routes to appropriate specialist agent
-        Now with conversation context awareness for demo flows
+        Now with conversation context awareness for demo flows and welcome message
         """
         try:
             # Get the latest message
@@ -585,6 +586,25 @@ class ChatbotService:
             
             # Skip routing if this is not a user message
             if not isinstance(latest_message, HumanMessage):
+                state["next"] = "END"
+                return state
+            
+            # Check if this is the very first interaction (no previous AI messages)
+            ai_messages = [msg for msg in state["messages"] if isinstance(msg, AIMessage)]
+            if len(ai_messages) == 0:
+                # First interaction - provide welcome message
+                welcome_message = (
+                    "👋 **Welcome to iQore!** I'm your virtual assistant here to help you discover our quantum-classical hybrid computing innovations.\n\n"
+                    "I can help you with:\n"
+                    "🔬 **Learn about iQore** - Our company, mission, and quantum technologies\n"
+                    "📋 **Our 19 Patents** - Breakthrough innovations in quantum computing\n"
+                    "⚡ **Technology Stack** - iQD quantum optimizer + iCD classical compute distribution\n"
+                    "🎯 **Live On-Site Demo** - Join the queue for a hands-on demo right here next to this laptop (usually <10 min wait!)\n\n"
+                    "What would you like to explore first?"
+                )
+                
+                agent_message = AIMessage(content=welcome_message, name="supervisor")
+                state["messages"].append(agent_message)
                 state["next"] = "END"
                 return state
             
@@ -696,21 +716,26 @@ class ChatbotService:
                 demo_prompt = ChatPromptTemplate.from_messages([
                     ("system", 
                      "You are the Demo Experience Coordinator for iQore's booth at this quantum computing convention. "
-                     "Your mission is to get visitors excited about our live demonstration.\n\n"
-                     "🎯 QUANTUM ALGORITHMS WE DEMONSTRATE:\n"
+                     "Your mission is to get visitors excited about our live ON-SITE demonstration.\n\n"
+                     "🎯 **ON-SITE DEMO EXPERIENCE** (Right here at the booth!):\n"
+                     "• **Location**: Live demonstration right next to this laptop where you're chatting\n"
+                     "• **Duration**: Quick 10-minute hands-on experience\n"
+                     "• **Queue Time**: Usually less than 10 minutes wait - live queue visible on screen\n"
+                     "• **What You'll See**: Real quantum algorithms running on our iQD + iCD stack\n\n"
+                     "🚀 **QUANTUM ALGORITHMS WE DEMONSTRATE**:\n"
                      "• Variational Quantum Eigensolver (VQE) for molecular simulation\n"
                      "• Quantum Approximate Optimization Algorithm (QAOA) for logistics optimization\n"
                      "• Grover's Search Algorithm for database optimization\n"
                      "• Shor's Algorithm simulation for cryptography research\n"
                      "• Quantum Machine Learning algorithms for pattern recognition\n\n"
-                     "🔧 WHAT YOU'LL SEE:\n"
-                     "• iQD (quantum emulator) + iCD (classical compute) working together\n"
+                     "⚡ **LIVE INTERACTIVE EXPERIENCE**:\n"
+                     "• iQD quantum optimizer + iCD classical compute working together\n"
                      "• Real-time performance metrics and comparisons\n"
-                     "• Interactive algorithm selection and execution\n"
-                     "• Live Q&A with our quantum engineers (15-20 minutes)\n\n"
-                     "Your goal: Get them excited and ask if they'd like to sign up for a demo slot! "
-                     "Be enthusiastic but professional. Mention that slots are limited and popular. "
-                     "End with: 'Would you like to reserve a spot in our demo queue?'"),
+                     "• You choose which algorithm to run\n"
+                     "• Direct Q&A with our quantum engineers\n\n"
+                     "Emphasize this is happening RIGHT HERE at the booth - no waiting for appointments! "
+                     "The live queue is visible and moves quickly. Be enthusiastic about the immediate, hands-on experience. "
+                     "End with: 'The queue is live and moving fast - would you like to join for a quick demo?'"),
                     ("human", "{input}")
                 ])
                 
@@ -729,9 +754,13 @@ class ChatbotService:
                     wait_time = await self.estimate_wait_time()
                     
                     response_content = (
-                        f"Fantastic! Let me get you signed up. 🎉\n\n"
-                        f"📊 **Current Queue Status:** {current_queue_length} people waiting (~{wait_time} minutes)\n\n"
-                        f"To reserve your spot, I'll need your name and email address. What's your name?"
+                        f"Excellent! Let's get you in the queue for our on-site demo! 🎉\n\n"
+                        f"📊 **Live Queue Status** (visible on screen):\n"
+                        f"• People ahead of you: {current_queue_length}\n"
+                        f"• Your estimated wait: ~{wait_time} minutes (usually less than 10!)\n"
+                        f"• Demo location: Right here next to this laptop\n"
+                        f"• Demo duration: Quick 10-minute hands-on experience\n\n"
+                        f"To join the queue, I'll need your name and email. What's your name?"
                     )
                     state["demo_state"] = "collecting_info"
                     
@@ -744,11 +773,13 @@ class ChatbotService:
                     wait_time = await self.estimate_wait_time()
                     
                     response_content = (
-                        f"📊 **Current Demo Queue Status:**\n"
-                        f"• People waiting: {current_queue_length}\n"
-                        f"• Estimated wait for new signups: {wait_time} minutes\n"
-                        f"• Demo duration: 15-20 minutes each\n\n"
-                        f"Would you like me to add you to the queue?"
+                        f"📊 **Live On-Site Demo Queue Status:**\n"
+                        f"• People currently waiting: {current_queue_length}\n"
+                        f"• Your estimated wait time: ~{wait_time} minutes (usually less than 10!)\n"
+                        f"• Demo location: Right here next to this laptop\n"
+                        f"• Demo duration: Quick 10-minute hands-on experience\n"
+                        f"• Queue visibility: Live updates on your screen\n\n"
+                        f"The queue moves fast! Would you like to join for an immediate demo experience?"
                     )
                     
                 else:
