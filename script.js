@@ -193,6 +193,9 @@ async function sendMessage() {
         // Add AI response to chat
         addMessage(data.response, 'ai');
         
+        // Monitor for demo-related conversation to show queue widget
+        monitorChatForDemo(message, data.response);
+        
         // Generate and show new contextual suggestions based on user's message
         const newSuggestions = generateContextualSuggestions(message);
         setTimeout(() => {
