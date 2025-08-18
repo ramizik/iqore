@@ -352,6 +352,218 @@ window.addEventListener('offline', function() {
     showSystemMessage('Connection lost. Please check your internet connection.', 'warning');
 });
 
-// Export functions for global access (if needed)
-window.sendMessage = sendMessage;
+// Phase 3: Demo Queue Status Widget Functions
+const QUEUE_STATUS_ENDPOINT = `${API_BASE_URL}/api/v1/demo/queue-status`;
+const DEMO_REQUEST_ENDPOINT = `${API_BASE_URL}/api/v1/demo/request`;
+
+// Queue widget state
+let queueWidgetVisible = false;
+let queueRefreshInterval = null;
+let userSessionId = null;
+
+// Initialize queue status checking
+document.addEventListener('DOMContentLoaded', function() {
+    // Start queue status monitoring
+    startQueueMonitoring();
+    
+    // Check if demo-related conversation has started
+    checkForDemoContext();
+});
+
+function startQueueMonitoring() {
+    // Check queue status every 30 seconds
+    refreshQueueStatus();
+    queueRefreshInterval = setInterval(refreshQueueStatus, 30000);
+}
+
+function stopQueueMonitoring() {
+    if (queueRefreshInterval) {
+        clearInterval(queueRefreshInterval);
+        queueRefreshInterval = null;
+    }
+}
+
+async function refreshQueueStatus() {
+    try {
+        const response = await fetch(QUEUE_STATUS_ENDPOINT, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        updateQueueDisplay(data);
+        
+        // Show widget if there's queue activity or if user requested demo
+        if (data.total_queue_length > 0 || data.current_demo_in_progress || queueWidgetVisible) {
+            showQueueWidget();
+        }
+
+    } catch (error) {
+        console.error('Error fetching queue status:', error);
+        updateQueueMessage('Unable to fetch queue status', 'error');
+    }
+}
+
+function updateQueueDisplay(queueData) {
+    const queueLengthEl = document.getElementById('queueLength');
+    const waitTimeEl = document.getElementById('waitTime');
+    const demoStatusEl = document.getElementById('demoStatus');
+    
+    if (queueLengthEl) queueLengthEl.textContent = queueData.total_queue_length || 0;
+    if (waitTimeEl) waitTimeEl.textContent = `${queueData.estimated_wait_time_minutes || 0} min`;
+    if (demoStatusEl) demoStatusEl.textContent = queueData.current_demo_in_progress ? 'Yes' : 'No';
+    
+    // Update queue message
+    if (queueData.message) {
+        updateQueueMessage(queueData.message, queueData.success ? 'success' : 'info');
+    }
+}
+
+function updateQueueMessage(message, type = 'info') {
+    const messageEl = document.getElementById('queueMessage');
+    if (messageEl) {
+        messageEl.textContent = message;
+        messageEl.className = `queue-message ${type}`;
+    }
+}
+
+function showQueueWidget() {
+    const widget = document.getElementById('queueStatusWidget');
+    if (widget && !queueWidgetVisible) {
+        widget.style.display = 'block';
+        widget.classList.add('show');
+        queueWidgetVisible = true;
+    }
+}
+
+function hideQueueWidget() {
+    const widget = document.getElementById('queueStatusWidget');
+    if (widget) {
+        widget.style.display = 'none';
+        widget.classList.remove('show');
+        queueWidgetVisible = false;
+    }
+}
+
+function toggleQueueWidget() {
+    const widget = document.getElementById('queueStatusWidget');
+    const toggleBtn = document.getElementById('queueToggleBtn');
+    
+    if (widget.classList.contains('collapsed')) {
+        widget.classList.remove('collapsed');
+        if (toggleBtn) toggleBtn.textContent = '−';
+    } else {
+        widget.classList.add('collapsed');
+        if (toggleBtn) toggleBtn.textContent = '+';
+    }
+}
+
+function requestDemo() {
+    // Send a demo request message through the chat
+    const demoMessage = "I'd like to join the demo queue";
+    sendMessage(demoMessage);
+    
+    // Show queue widget if not already visible
+    showQueueWidget();
+    updateQueueMessage('Demo request sent! The AI will help you sign up.', 'success');
+}
+
+function checkForDemoContext() {
+    // Check if recent chat history contains demo-related keywords
+    const demoKeywords = ['demo', 'demonstration', 'queue', 'signup', 'reserve'];
+    const recentMessages = chatHistory.slice(-5); // Check last 5 messages
+    
+    const hasDemoContext = recentMessages.some(msg => 
+        msg.user && demoKeywords.some(keyword => 
+            msg.user.toLowerCase().includes(keyword)
+        )
+    );
+    
+    if (hasDemoContext) {
+        showQueueWidget();
+    }
+}
+
+// Monitor chat for demo-related conversations
+function monitorChatForDemo(userMessage, aiResponse) {
+    const demoKeywords = ['demo', 'demonstration', 'queue', 'signup', 'reserve', 'join'];
+    const message = (userMessage + ' ' + aiResponse).toLowerCase();
+    
+    const isDemoRelated = demoKeywords.some(keyword => message.includes(keyword));
+    
+    if (isDemoRelated) {
+        setTimeout(() => {
+            showQueueWidget();
+            refreshQueueStatus();
+        }, 1000);
+    }
+    
+    // Check for session ID in AI response
+    const sessionIdMatch = aiResponse.match(/session[_\s]*id[:\s]*([a-f0-9\-]{36})/i);
+    if (sessionIdMatch) {
+        userSessionId = sessionIdMatch[1];
+        console.log('User session ID detected:', userSessionId);
+        
+        // Start personalized status updates
+        startPersonalizedStatusUpdates();
+    }
+}
+
+function startPersonalizedStatusUpdates() {
+    if (!userSessionId) return;
+    
+    // Check user's specific queue status every 15 seconds
+    const personalizedInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/demo/queue/${userSessionId}`);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    updateQueueMessage(
+                        `Your position: #${data.queue_position} | Wait time: ~${data.estimated_wait_time} min`,
+                        'success'
+                    );
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching personal queue status:', error);
+        }
+    }, 15000);
+    
+    // Stop personal updates after 2 hours
+    setTimeout(() => {
+        clearInterval(personalizedInterval);
+    }, 2 * 60 * 60 * 1000);
+}
+
+// Enhance the existing sendMessage function to monitor for demo conversations
+const originalSendMessage = sendMessage;
+window.sendMessage = async function(messageText = null) {
+    const result = await originalSendMessage(messageText);
+    
+    // Monitor the conversation
+    if (chatHistory.length >= 2) {
+        const lastUserMsg = chatHistory[chatHistory.length - 2]?.user || '';
+        const lastAiMsg = chatHistory[chatHistory.length - 1]?.assistant || '';
+        monitorChatForDemo(lastUserMsg, lastAiMsg);
+    }
+    
+    return result;
+};
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', function() {
+    stopQueueMonitoring();
+});
+
+// Export new functions for global access
+window.toggleQueueWidget = toggleQueueWidget;
+window.refreshQueueStatus = refreshQueueStatus;
+window.requestDemo = requestDemo;
 window.handleKeyDown = handleKeyDown; 

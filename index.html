@@ -21,6 +21,39 @@
             </div>
         </header>
 
+        <!-- Phase 3: Demo Queue Status Widget -->
+        <div class="queue-status-widget" id="queueStatusWidget" style="display: none;">
+            <div class="queue-status-header">
+                <h3>🎯 Live Demo Queue</h3>
+                <button class="queue-toggle-btn" id="queueToggleBtn" onclick="toggleQueueWidget()">−</button>
+            </div>
+            <div class="queue-status-content" id="queueStatusContent">
+                <div class="queue-metrics">
+                    <div class="queue-metric">
+                        <span class="metric-label">People Waiting</span>
+                        <span class="metric-value" id="queueLength">0</span>
+                    </div>
+                    <div class="queue-metric">
+                        <span class="metric-label">Est. Wait Time</span>
+                        <span class="metric-value" id="waitTime">0 min</span>
+                    </div>
+                    <div class="queue-metric">
+                        <span class="metric-label">Demo in Progress</span>
+                        <span class="metric-value" id="demoStatus">No</span>
+                    </div>
+                </div>
+                <div class="queue-actions">
+                    <button class="queue-action-btn primary" id="joinQueueBtn" onclick="requestDemo()">
+                        Join Demo Queue
+                    </button>
+                    <button class="queue-action-btn secondary" id="refreshQueueBtn" onclick="refreshQueueStatus()">
+                        Refresh Status
+                    </button>
+                </div>
+                <div class="queue-message" id="queueMessage"></div>
+            </div>
+        </div>
+
         <!-- Chat Messages Area -->
         <main class="chat-main">
             <div class="messages-container" id="messagesContainer">

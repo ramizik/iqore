@@ -20,6 +20,11 @@ from langchain_mongodb import MongoDBAtlasVectorSearch
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
+# Phase 2: LangChain Tools and Output Parsers
+from langchain.tools import BaseTool
+from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.prompts import PromptTemplate
+
 # LangGraph imports for multi-agent system
 from langgraph.graph import StateGraph, END
 from typing_extensions import TypedDict
@@ -49,6 +54,249 @@ class HealthResponse(BaseModel):
     service: str
     document_count: Optional[int] = None
     timestamp: str
+
+# Phase 1: Enhanced Pydantic Models for Demo Queue Management
+from pydantic import EmailStr, validator
+from enum import Enum
+from datetime import datetime
+
+class DemoStatus(str, Enum):
+    WAITING = "waiting"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    NO_SHOW = "no_show"
+
+class VisitorInfo(BaseModel):
+    name: str
+    email: EmailStr
+    company: Optional[str] = None
+    interest_areas: List[str] = []
+    
+    @validator('name')
+    def validate_name(cls, v):
+        if not v or len(v.strip()) < 2:
+            raise ValueError('Name must be at least 2 characters')
+        if len(v) > 50:
+            raise ValueError('Name must be less than 50 characters')
+        return v.strip().title()
+
+class DemoRequest(BaseModel):
+    visitor_info: VisitorInfo
+    session_id: Optional[str] = None
+    timestamp: Optional[datetime] = None
+    status: DemoStatus = DemoStatus.WAITING
+    notes: Optional[str] = None
+
+class DemoQueueEntry(BaseModel):
+    id: Optional[str] = None
+    session_id: str
+    name: str
+    email: str
+    company: Optional[str] = None
+    interest_areas: List[str] = []
+    status: DemoStatus
+    timestamp: datetime
+    queue_position: Optional[int] = None
+    estimated_wait_time: Optional[int] = None
+    notes: Optional[str] = None
+
+class QueueStatusResponse(BaseModel):
+    success: bool
+    total_queue_length: int
+    estimated_wait_time_minutes: int
+    current_demo_in_progress: bool
+    average_demo_duration_minutes: float = 17.5
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+class UserQueueStatusResponse(BaseModel):
+    success: bool
+    session_id: Optional[str] = None
+    name: Optional[str] = None
+    status: Optional[DemoStatus] = None
+    queue_position: Optional[int] = None
+    estimated_wait_time: Optional[int] = None
+    total_in_queue: Optional[int] = None
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+class StaffQueueUpdateRequest(BaseModel):
+    session_id: str
+    new_status: DemoStatus
+    notes: Optional[str] = None
+
+class StaffQueueResponse(BaseModel):
+    success: bool
+    total_entries: int
+    waiting_count: int
+    in_progress_count: int
+    completed_today: int
+    queue_entries: List[DemoQueueEntry] = []
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+# Phase 2: Custom LangChain Tools for Demo Queue Management
+class DemoQueueTool(BaseTool):
+    """Tool for managing demo queue operations within LangChain agents"""
+    name: str = "demo_queue_manager"
+    description: str = (
+        "Manage demo queue operations including adding visitors, checking status, and retrieving queue information. "
+        "Use this tool when visitors want to sign up for demos or check their queue position. "
+        "Input should be a JSON string with 'action' and relevant parameters."
+    )
+    chatbot_service: Optional['ChatbotService'] = None
+
+    def __init__(self, chatbot_service: 'ChatbotService'):
+        super().__init__()
+        self.chatbot_service = chatbot_service
+
+    async def _arun(self, action_input: str) -> str:
+        """Asynchronous execution of demo queue operations"""
+        try:
+            import json
+            action_data = json.loads(action_input)
+            action = action_data.get("action")
+            
+            if action == "add_to_queue":
+                result = await self.chatbot_service.add_to_demo_queue(
+                    name=action_data["name"],
+                    email=action_data["email"],
+                    company=action_data.get("company"),
+                    interest_areas=action_data.get("interest_areas", []),
+                    session_id=action_data.get("session_id")
+                )
+                return json.dumps(result)
+                
+            elif action == "get_queue_status":
+                if "session_id" in action_data:
+                    result = await self.chatbot_service.get_queue_status(action_data["session_id"])
+                else:
+                    queue_length = await self.chatbot_service.get_current_queue_length()
+                    wait_time = await self.chatbot_service.estimate_wait_time()
+                    result = {
+                        "success": True,
+                        "queue_length": queue_length,
+                        "estimated_wait_time": wait_time
+                    }
+                return json.dumps(result)
+                
+            elif action == "get_overall_status":
+                queue_length = await self.chatbot_service.get_current_queue_length()
+                wait_time = await self.chatbot_service.estimate_wait_time()
+                in_progress = await self.chatbot_service.get_in_progress_count()
+                result = {
+                    "success": True,
+                    "total_queue_length": queue_length,
+                    "estimated_wait_time_minutes": wait_time,
+                    "demos_in_progress": in_progress
+                }
+                return json.dumps(result)
+                
+            else:
+                return json.dumps({"success": False, "error": f"Unknown action: {action}"})
+                
+        except Exception as e:
+            return json.dumps({"success": False, "error": str(e)})
+
+    def _run(self, action_input: str) -> str:
+        """Synchronous fallback - not implemented for async operations"""
+        return json.dumps({"success": False, "error": "This tool requires async execution"})
+
+class UserInfoExtractionTool(BaseTool):
+    """Tool for extracting structured visitor information from natural language"""
+    name: str = "user_info_extractor"
+    description: str = (
+        "Extract structured visitor information (name, email, company) from natural language conversation. "
+        "Use this when visitors provide their details for demo signup. "
+        "Input should be the user's message text."
+    )
+
+    def _run(self, message_input: str) -> str:
+        """Extract user information from natural language message"""
+        try:
+            import json
+            # Basic extraction logic - this could be enhanced with more sophisticated NLP
+            info = {}
+            message_lower = message_input.lower().strip()
+            
+            # Extract email
+            import re
+            email_pattern = r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
+            email_match = re.search(email_pattern, message_input)
+            if email_match:
+                info['email'] = email_match.group(0).lower()
+            
+            # Extract name patterns
+            name_patterns = [
+                r"my name is ([a-zA-Z\s]+)",
+                r"i'm ([a-zA-Z\s]+)",
+                r"name's ([a-zA-Z\s]+)",
+                r"i am ([a-zA-Z\s]+)",
+                r"call me ([a-zA-Z\s]+)"
+            ]
+            
+            for pattern in name_patterns:
+                name_match = re.search(pattern, message_lower)
+                if name_match:
+                    potential_name = name_match.group(1).strip().title()
+                    if 2 <= len(potential_name) <= 50:
+                        info['name'] = potential_name
+                        break
+            
+            # If no name pattern found, check if message might be just a name
+            if not info.get('name') and 2 <= len(message_input.strip()) <= 50 and '@' not in message_input:
+                words = message_input.strip().split()
+                if 1 <= len(words) <= 4 and re.match(r'^[a-zA-Z\s]+$', message_input.strip()):
+                    info['name'] = message_input.strip().title()
+            
+            # Extract company
+            company_patterns = [
+                r"i work at ([a-zA-Z0-9\s&.-]+)",
+                r"work for ([a-zA-Z0-9\s&.-]+)",
+                r"from ([a-zA-Z0-9\s&.-]+)",
+                r"company is ([a-zA-Z0-9\s&.-]+)"
+            ]
+            
+            for pattern in company_patterns:
+                company_match = re.search(pattern, message_lower)
+                if company_match:
+                    potential_company = company_match.group(1).strip().title()
+                    if 2 <= len(potential_company) <= 100:
+                        info['company'] = potential_company
+                        break
+            
+            return json.dumps({
+                "success": True,
+                "extracted_info": info,
+                "info_complete": bool(info.get('name') and info.get('email'))
+            })
+            
+        except Exception as e:
+            return json.dumps({"success": False, "error": str(e)})
+
+# Phase 2: Pydantic Output Parsers for Structured Data
+class ExtractedVisitorInfo(BaseModel):
+    """Structured visitor information for demo signups"""
+    name: Optional[str] = None
+    email: Optional[str] = None
+    company: Optional[str] = None
+    interest_areas: List[str] = []
+    info_complete: bool = False
+    confidence_score: float = 0.0
+
+class DemoSignupIntent(BaseModel):
+    """Structured intent detection for demo signups"""
+    wants_demo: bool = False
+    has_questions: bool = False
+    asking_about_queue: bool = False
+    providing_info: bool = False
+    intent_confidence: float = 0.0
+    next_action: str = "continue_conversation"
+
+# Phase 2: Output Parsers
+visitor_info_parser = PydanticOutputParser(pydantic_object=ExtractedVisitorInfo)
+demo_intent_parser = PydanticOutputParser(pydantic_object=DemoSignupIntent)
 
 # LangGraph State for multi-agent system
 class AgentState(TypedDict):
@@ -84,6 +332,9 @@ class ChatbotService:
         self.demo_queue_collection = None
         self.multi_agent_graph = None
         self.llm = None
+        # Phase 2: Initialize LangChain tools
+        self.demo_queue_tool = None
+        self.user_info_tool = None
         
     async def initialize(self):
         """Initialize the chatbot service with multi-agent system"""
@@ -128,6 +379,9 @@ class ChatbotService:
             
             # Initialize the traditional RAG chain for technical agent
             await self._initialize_rag_chain()
+            
+            # Phase 2: Initialize LangChain tools
+            await self._initialize_langchain_tools()
             
             # Initialize multi-agent system
             await self._initialize_multi_agent_system()
@@ -204,6 +458,22 @@ class ChatbotService:
         except Exception as e:
             logger.error(f"Error initializing RAG chain: {e}")
             self.qa_chain = None
+    
+    async def _initialize_langchain_tools(self):
+        """Initialize custom LangChain tools for demo queue management"""
+        try:
+            # Initialize demo queue management tool
+            self.demo_queue_tool = DemoQueueTool(chatbot_service=self)
+            
+            # Initialize user info extraction tool
+            self.user_info_tool = UserInfoExtractionTool()
+            
+            logger.info("✅ LangChain tools initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Error initializing LangChain tools: {e}")
+            self.demo_queue_tool = None
+            self.user_info_tool = None
     
     async def _initialize_multi_agent_system(self):
         """Initialize the LangGraph multi-agent system with supervisor pattern"""
@@ -877,6 +1147,151 @@ class ChatbotService:
             state["next"] = "END"
             return state
     
+    # Phase 1: Enhanced Queue Management Methods
+    async def get_in_progress_count(self) -> int:
+        """Get count of demos currently in progress"""
+        try:
+            if self.demo_queue_collection is None:
+                return 0
+            return self.demo_queue_collection.count_documents({"status": "in_progress"})
+        except Exception as e:
+            logger.error(f"Error getting in-progress count: {e}")
+            return 0
+
+    async def get_full_queue_status(self) -> Dict:
+        """Get comprehensive queue status for staff management"""
+        try:
+            if self.demo_queue_collection is None:
+                return {
+                    "success": False,
+                    "error": "Demo queue collection not available",
+                    "total_entries": 0,
+                    "waiting_count": 0,
+                    "in_progress_count": 0,
+                    "completed_today": 0,
+                    "queue_entries": []
+                }
+            
+            # Get counts by status
+            waiting_count = self.demo_queue_collection.count_documents({"status": "waiting"})
+            in_progress_count = self.demo_queue_collection.count_documents({"status": "in_progress"})
+            
+            # Get today's completed demos
+            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            completed_today = self.demo_queue_collection.count_documents({
+                "status": "completed",
+                "timestamp": {"$gte": today_start}
+            })
+            
+            # Get all active queue entries (waiting + in_progress)
+            queue_entries = []
+            cursor = self.demo_queue_collection.find(
+                {"status": {"$in": ["waiting", "in_progress"]}},
+                {"_id": 0}  # Exclude MongoDB's _id field
+            ).sort("timestamp", 1)
+            
+            position = 1
+            for entry in cursor:
+                queue_entry = DemoQueueEntry(
+                    session_id=entry["session_id"],
+                    name=entry["name"],
+                    email=entry["email"],
+                    company=entry.get("company"),
+                    interest_areas=entry.get("interest_areas", []),
+                    status=DemoStatus(entry["status"]),
+                    timestamp=entry["timestamp"],
+                    queue_position=position if entry["status"] == "waiting" else None,
+                    estimated_wait_time=((position - 1) * 17.5) if entry["status"] == "waiting" else None,
+                    notes=entry.get("notes")
+                )
+                queue_entries.append(queue_entry)
+                if entry["status"] == "waiting":
+                    position += 1
+            
+            total_entries = waiting_count + in_progress_count
+            
+            return {
+                "success": True,
+                "total_entries": total_entries,
+                "waiting_count": waiting_count,
+                "in_progress_count": in_progress_count,
+                "completed_today": completed_today,
+                "queue_entries": queue_entries,
+                "message": f"Queue status: {waiting_count} waiting, {in_progress_count} in progress"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting full queue status: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "total_entries": 0,
+                "waiting_count": 0,
+                "in_progress_count": 0,
+                "completed_today": 0,
+                "queue_entries": []
+            }
+
+    async def update_demo_status(self, session_id: str, new_status: str, notes: Optional[str] = None) -> Dict:
+        """Update demo status (for staff management)"""
+        try:
+            if self.demo_queue_collection is None:
+                return {"success": False, "error": "Demo queue collection not available"}
+            
+            # Find the entry
+            entry = self.demo_queue_collection.find_one({"session_id": session_id})
+            if not entry:
+                return {"success": False, "error": "Session not found"}
+            
+            # Prepare update data
+            update_data = {
+                "status": new_status,
+                "updated_at": datetime.utcnow()
+            }
+            if notes:
+                update_data["notes"] = notes
+            
+            # Update the entry
+            result = self.demo_queue_collection.update_one(
+                {"session_id": session_id},
+                {"$set": update_data}
+            )
+            
+            if result.modified_count > 0:
+                return {
+                    "success": True,
+                    "message": f"Demo status updated to {new_status}",
+                    "session_id": session_id
+                }
+            else:
+                return {"success": False, "error": "Failed to update demo status"}
+                
+        except Exception as e:
+            logger.error(f"Error updating demo status: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def remove_from_queue(self, session_id: str) -> Dict:
+        """Remove entry from demo queue"""
+        try:
+            if self.demo_queue_collection is None:
+                return {"success": False, "error": "Demo queue collection not available"}
+            
+            # Remove the entry
+            result = self.demo_queue_collection.delete_one({"session_id": session_id})
+            
+            if result.deleted_count > 0:
+                return {
+                    "success": True,
+                    "message": "Entry removed from demo queue",
+                    "session_id": session_id
+                }
+            else:
+                return {"success": False, "error": "Session not found in queue"}
+                
+        except Exception as e:
+            logger.error(f"Error removing from queue: {e}")
+            return {"success": False, "error": str(e)}
+
     async def get_response(self, message: str, chat_history: List[Dict[str, str]]) -> Dict:
         """Get response from the multi-agent system"""
         try:
@@ -1356,36 +1771,142 @@ async def api_status() -> Dict[str, str]:
         "features": ["natural_demo_signup", "queue_management", "user_info_extraction", "conversation_flow"]
     }
 
-# Phase 2: Demo Queue API Endpoints
-@app.get("/api/v1/demo/queue-status")
-async def get_demo_queue_status() -> Dict:
-    """Get current demo queue status"""
+# Phase 1: Enhanced Demo Queue API Endpoints
+@app.get("/api/v1/demo/queue-status", response_model=QueueStatusResponse)
+async def get_demo_queue_status() -> QueueStatusResponse:
+    """Get comprehensive demo queue status"""
     try:
         queue_length = await chatbot_service.get_current_queue_length()
         estimated_wait = await chatbot_service.estimate_wait_time()
+        in_progress = await chatbot_service.get_in_progress_count()
         
-        return {
-            "queue_length": queue_length,
-            "estimated_wait_time_minutes": estimated_wait,
-            "status": "active"
-        }
+        return QueueStatusResponse(
+            success=True,
+            total_queue_length=queue_length,
+            estimated_wait_time_minutes=estimated_wait,
+            current_demo_in_progress=in_progress > 0,
+            message="Queue status retrieved successfully" if queue_length > 0 else "Queue is currently empty"
+        )
     except Exception as e:
         logger.error(f"Error getting queue status: {e}")
-        return {
-            "queue_length": 0,
-            "estimated_wait_time_minutes": 0,
-            "status": "error",
-            "error": str(e)
-        }
+        return QueueStatusResponse(
+            success=False,
+            total_queue_length=0,
+            estimated_wait_time_minutes=0,
+            current_demo_in_progress=False,
+            error=str(e)
+        )
 
-@app.get("/api/v1/demo/queue/{session_id}")
-async def get_user_queue_status(session_id: str) -> Dict:
+@app.get("/api/v1/demo/queue/{session_id}", response_model=UserQueueStatusResponse)
+async def get_user_queue_status(session_id: str) -> UserQueueStatusResponse:
     """Get queue status for specific user session"""
     try:
         status = await chatbot_service.get_queue_status(session_id)
-        return status
+        
+        if status["success"]:
+            return UserQueueStatusResponse(
+                success=True,
+                session_id=status["session_id"],
+                name=status["name"],
+                status=DemoStatus(status["status"]),
+                queue_position=status["queue_position"],
+                estimated_wait_time=status["estimated_wait_time"],
+                total_in_queue=status["total_in_queue"],
+                message=f"You are #{status['queue_position']} in queue"
+            )
+        else:
+            return UserQueueStatusResponse(
+                success=False,
+                error=status["error"]
+            )
     except Exception as e:
         logger.error(f"Error getting user queue status: {e}")
+        return UserQueueStatusResponse(success=False, error=str(e))
+
+@app.post("/api/v1/demo/request", response_model=UserQueueStatusResponse)
+async def create_demo_request(request: DemoRequest) -> UserQueueStatusResponse:
+    """Create a new demo request and add to queue"""
+    try:
+        user_info = {
+            "name": request.visitor_info.name,
+            "email": request.visitor_info.email,
+            "company": request.visitor_info.company,
+            "interest_areas": request.visitor_info.interest_areas
+        }
+        result = await chatbot_service.add_to_demo_queue(user_info)
+        
+        if result["success"]:
+            return UserQueueStatusResponse(
+                success=True,
+                session_id=result["session_id"],
+                name=user_info["name"],
+                status=DemoStatus.WAITING,
+                queue_position=result["queue_position"],
+                estimated_wait_time=result["estimated_wait_time"],
+                total_in_queue=result["queue_length"],
+                message=f"Successfully added to demo queue. You are #{result['queue_position']} in line."
+            )
+        else:
+            return UserQueueStatusResponse(
+                success=False,
+                error=result["error"]
+            )
+    except Exception as e:
+        logger.error(f"Error creating demo request: {e}")
+        return UserQueueStatusResponse(success=False, error=str(e))
+
+# Staff Management Endpoints
+@app.get("/api/v1/staff/demo/queue", response_model=StaffQueueResponse)
+async def get_staff_queue_view() -> StaffQueueResponse:
+    """Get comprehensive queue view for staff management"""
+    try:
+        queue_data = await chatbot_service.get_full_queue_status()
+        return StaffQueueResponse(**queue_data)
+    except Exception as e:
+        logger.error(f"Error getting staff queue view: {e}")
+        return StaffQueueResponse(
+            success=False,
+            total_entries=0,
+            waiting_count=0,
+            in_progress_count=0,
+            completed_today=0,
+            error=str(e)
+        )
+
+@app.put("/api/v1/staff/demo/queue/{session_id}", response_model=UserQueueStatusResponse)
+async def update_demo_status(session_id: str, update_request: StaffQueueUpdateRequest) -> UserQueueStatusResponse:
+    """Update demo status (staff only)"""
+    try:
+        result = await chatbot_service.update_demo_status(
+            session_id=session_id,
+            new_status=update_request.new_status.value,
+            notes=update_request.notes
+        )
+        
+        if result["success"]:
+            return UserQueueStatusResponse(
+                success=True,
+                session_id=session_id,
+                status=update_request.new_status,
+                message=f"Demo status updated to {update_request.new_status.value}"
+            )
+        else:
+            return UserQueueStatusResponse(
+                success=False,
+                error=result["error"]
+            )
+    except Exception as e:
+        logger.error(f"Error updating demo status: {e}")
+        return UserQueueStatusResponse(success=False, error=str(e))
+
+@app.delete("/api/v1/staff/demo/queue/{session_id}")
+async def remove_from_queue(session_id: str) -> Dict[str, any]:
+    """Remove entry from demo queue (staff only)"""
+    try:
+        result = await chatbot_service.remove_from_queue(session_id)
+        return result
+    except Exception as e:
+        logger.error(f"Error removing from queue: {e}")
         return {"success": False, "error": str(e)}
 
 @app.post("/api/v1/chat", response_model=ChatResponse)

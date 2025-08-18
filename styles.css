@@ -432,3 +432,198 @@ body {
         transform: translateY(0);
     }
 }
+
+/* Phase 3: Demo Queue Status Widget Styles */
+.queue-status-widget {
+    background: linear-gradient(135deg, rgba(45, 27, 105, 0.9) 0%, rgba(26, 11, 46, 0.9) 100%);
+    margin: 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(139, 69, 255, 0.3);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+}
+
+.queue-status-widget.collapsed .queue-status-content {
+    display: none;
+}
+
+.queue-status-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(139, 69, 255, 0.2);
+}
+
+.queue-status-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #ffffff;
+    margin: 0;
+}
+
+.queue-toggle-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.queue-toggle-btn:hover {
+    background: rgba(139, 69, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.queue-status-content {
+    padding: 20px;
+}
+
+.queue-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.queue-metric {
+    text-align: center;
+    padding: 12px;
+    background: rgba(139, 69, 255, 0.1);
+    border-radius: 12px;
+    border: 1px solid rgba(139, 69, 255, 0.2);
+}
+
+.metric-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.metric-value {
+    display: block;
+    font-size: 18px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.queue-actions {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.queue-action-btn {
+    flex: 1;
+    min-width: 140px;
+    padding: 12px 20px;
+    border-radius: 12px;
+    border: none;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: capitalize;
+}
+
+.queue-action-btn.primary {
+    background: linear-gradient(135deg, #8b45ff 0%, #6b73ff 100%);
+    color: white;
+    box-shadow: 0 4px 16px rgba(139, 69, 255, 0.4);
+}
+
+.queue-action-btn.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(139, 69, 255, 0.5);
+}
+
+.queue-action-btn.primary:active {
+    transform: translateY(0);
+}
+
+.queue-action-btn.secondary {
+    background: rgba(139, 69, 255, 0.1);
+    color: #8b45ff;
+    border: 1px solid rgba(139, 69, 255, 0.3);
+}
+
+.queue-action-btn.secondary:hover {
+    background: rgba(139, 69, 255, 0.2);
+    border-color: rgba(139, 69, 255, 0.5);
+}
+
+.queue-message {
+    font-size: 13px;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.7);
+    padding: 12px;
+    background: rgba(139, 69, 255, 0.05);
+    border-radius: 8px;
+    border-left: 3px solid #8b45ff;
+    margin-top: 8px;
+    min-height: 20px;
+}
+
+.queue-message.success {
+    background: rgba(34, 197, 94, 0.1);
+    border-left-color: #22c55e;
+    color: #86efac;
+}
+
+.queue-message.error {
+    background: rgba(239, 68, 68, 0.1);
+    border-left-color: #ef4444;
+    color: #fca5a5;
+}
+
+.queue-message.warning {
+    background: rgba(245, 158, 11, 0.1);
+    border-left-color: #f59e0b;
+    color: #fbbf24;
+}
+
+/* Queue Widget Animation */
+@keyframes slideInQueue {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.queue-status-widget.show {
+    animation: slideInQueue 0.3s ease-out;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .queue-metrics {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    
+    .queue-actions {
+        flex-direction: column;
+    }
+    
+    .queue-action-btn {
+        min-width: unset;
+    }
+}
