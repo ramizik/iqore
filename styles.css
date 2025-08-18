@@ -28,7 +28,7 @@ body {
 }
 
 .main-logo {
-    max-height: 10px;
+    max-height: 200px;
     width: 1500px;
     object-fit: contain;
     filter: drop-shadow(0 4px 16px rgba(139, 69, 255, 0.4));
