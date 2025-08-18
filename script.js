@@ -464,14 +464,290 @@ function toggleQueueWidget() {
     }
 }
 
-function requestDemo() {
-    // Send a demo request message through the chat
-    const demoMessage = "I'd like to join the demo queue";
-    sendMessage(demoMessage);
+async function requestDemo() {
+    // Try direct signup first, fall back to conversation if no user info
+    try {
+        // Check if we have user info from previous conversations
+        const userInfo = extractUserInfoFromHistory();
+        
+        if (userInfo.name && userInfo.email) {
+            // Direct API call to add to queue
+            await addToQueueDirectly(userInfo);
+        } else {
+            // Try quick form signup first, then fall back to conversation
+            const quickSignup = await tryQuickSignupForm();
+            
+            if (quickSignup.success) {
+                await addToQueueDirectly(quickSignup.userInfo);
+            } else {
+                // Fall back to conversational signup
+                const demoMessage = "I'd like to join the demo queue";
+                await sendMessage(demoMessage);
+                updateQueueMessage('The AI will help you sign up! Please provide your name and email.', 'info');
+            }
+        }
+        
+        // Show queue widget if not already visible
+        showQueueWidget();
+        
+    } catch (error) {
+        console.error('Error requesting demo:', error);
+        updateQueueMessage('Error requesting demo. Please try through chat.', 'error');
+        
+        // Fall back to conversational method
+        const demoMessage = "I'd like to join the demo queue";
+        await sendMessage(demoMessage);
+    }
+}
+
+async function addToQueueDirectly(userInfo) {
+    try {
+        updateQueueMessage('Adding you to the demo queue...', 'info');
+        
+        const response = await fetch(`${API_BASE_URL}/api/v1/demo/request`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                visitor_info: {
+                    name: userInfo.name,
+                    email: userInfo.email,
+                    company: userInfo.company || null,
+                    interest_areas: []
+                }
+            })
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+            userSessionId = result.session_id;
+            updateQueueMessage(
+                `✅ Success! You're #${result.queue_position} in queue. Wait time: ~${result.estimated_wait_time} min`,
+                'success'
+            );
+            
+            // Start personalized updates
+            startPersonalizedStatusUpdates();
+            
+            // Add success message to chat
+            addSystemMessageToChat(
+                `🎉 Great! You've been added to our demo queue.\n\n` +
+                `📊 Your Position: #${result.queue_position}\n` +
+                `⏱️ Estimated Wait: ${result.estimated_wait_time} minutes\n` +
+                `🆔 Session ID: ${result.session_id}`
+            );
+            
+        } else {
+            throw new Error(result.error || 'Failed to add to queue');
+        }
+        
+    } catch (error) {
+        console.error('Direct queue addition failed:', error);
+        updateQueueMessage('Direct signup failed. Please use the chat to sign up.', 'error');
+        throw error;
+    }
+}
+
+function extractUserInfoFromHistory() {
+    // Extract user info from recent chat history
+    const userInfo = { name: null, email: null, company: null };
     
-    // Show queue widget if not already visible
-    showQueueWidget();
-    updateQueueMessage('Demo request sent! The AI will help you sign up.', 'success');
+    // Look through recent chat history for user information
+    const recentMessages = chatHistory.slice(-10); // Last 10 exchanges
+    
+    for (const exchange of recentMessages) {
+        if (exchange.user && exchange.assistant) {
+            const userMsg = exchange.user.toLowerCase();
+            const aiMsg = exchange.assistant.toLowerCase();
+            
+            // Extract email
+            const emailMatch = exchange.user.match(/\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/);
+            if (emailMatch) {
+                userInfo.email = emailMatch[0];
+            }
+            
+            // Extract name (look for patterns like "my name is", "I'm", etc.)
+            const namePatterns = [
+                /my name is ([a-zA-Z\s]{2,50})/i,
+                /i'm ([a-zA-Z\s]{2,50})/i,
+                /name's ([a-zA-Z\s]{2,50})/i,
+                /i am ([a-zA-Z\s]{2,50})/i,
+                /call me ([a-zA-Z\s]{2,50})/i
+            ];
+            
+            for (const pattern of namePatterns) {
+                const nameMatch = exchange.user.match(pattern);
+                if (nameMatch) {
+                    userInfo.name = nameMatch[1].trim();
+                    break;
+                }
+            }
+            
+            // If no pattern found, check if user message might be just a name
+            if (!userInfo.name && userMsg.length > 2 && userMsg.length < 50 && 
+                !userMsg.includes('@') && /^[a-zA-Z\s]+$/.test(exchange.user.trim())) {
+                const words = exchange.user.trim().split(/\s+/);
+                if (words.length >= 1 && words.length <= 4) {
+                    userInfo.name = exchange.user.trim();
+                }
+            }
+            
+            // Extract company
+            const companyPatterns = [
+                /work at ([a-zA-Z0-9\s&.-]{2,100})/i,
+                /work for ([a-zA-Z0-9\s&.-]{2,100})/i,
+                /from ([a-zA-Z0-9\s&.-]{2,100})/i,
+                /company is ([a-zA-Z0-9\s&.-]{2,100})/i
+            ];
+            
+            for (const pattern of companyPatterns) {
+                const companyMatch = exchange.user.match(pattern);
+                if (companyMatch) {
+                    userInfo.company = companyMatch[1].trim();
+                    break;
+                }
+            }
+        }
+    }
+    
+    return userInfo;
+}
+
+function addSystemMessageToChat(message) {
+    // Add a system message to the chat interface
+    const messagesContainer = document.getElementById('messagesContainer');
+    
+    if (messagesContainer) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message-group ai-message';
+        messageDiv.innerHTML = `
+            <div class="message-avatar">
+                <div class="avatar ai-avatar-small"></div>
+            </div>
+            <div class="message-bubble">
+                <p>${message.replace(/\n/g, '<br>')}</p>
+            </div>
+        `;
+        messagesContainer.appendChild(messageDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+}
+
+async function tryQuickSignupForm() {
+    return new Promise((resolve) => {
+        // Create modal overlay
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        `;
+        
+        // Create form modal
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        `;
+        
+        modal.innerHTML = `
+            <h2 style="color: #2d1b69; margin-bottom: 20px; text-align: center;">🎯 Join Demo Queue</h2>
+            <p style="color: #666; margin-bottom: 20px; text-align: center; font-size: 14px;">
+                Quick signup for our live quantum computing demonstration
+            </p>
+            <form id="quickSignupForm">
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #333;">Name *</label>
+                    <input type="text" id="quickName" required 
+                           style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
+                           placeholder="Enter your full name">
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #333;">Email *</label>
+                    <input type="email" id="quickEmail" required
+                           style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
+                           placeholder="Enter your email address">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #333;">Company (Optional)</label>
+                    <input type="text" id="quickCompany"
+                           style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
+                           placeholder="Enter your company name">
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button type="submit" 
+                            style="background: linear-gradient(135deg, #8b45ff 0%, #6b73ff 100%); color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                        Join Queue
+                    </button>
+                    <button type="button" id="cancelSignup"
+                            style="background: #6c757d; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        `;
+        
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        
+        // Focus on name input
+        setTimeout(() => {
+            document.getElementById('quickName').focus();
+        }, 100);
+        
+        // Handle form submission
+        document.getElementById('quickSignupForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('quickName').value.trim();
+            const email = document.getElementById('quickEmail').value.trim();
+            const company = document.getElementById('quickCompany').value.trim();
+            
+            if (name && email) {
+                document.body.removeChild(overlay);
+                resolve({
+                    success: true,
+                    userInfo: { name, email, company: company || null }
+                });
+            }
+        });
+        
+        // Handle cancel
+        document.getElementById('cancelSignup').addEventListener('click', () => {
+            document.body.removeChild(overlay);
+            resolve({ success: false });
+        });
+        
+        // Handle overlay click to close
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                document.body.removeChild(overlay);
+                resolve({ success: false });
+            }
+        });
+        
+        // Handle escape key
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                document.body.removeChild(overlay);
+                document.removeEventListener('keydown', handleEscape);
+                resolve({ success: false });
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+    });
 }
 
 function checkForDemoContext() {

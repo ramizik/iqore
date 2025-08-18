@@ -1417,51 +1417,90 @@ class ChatbotService:
     async def add_to_demo_queue(self, user_info: Dict) -> Dict:
         """Add user to demo queue and return queue status"""
         try:
+            logger.info(f"Adding user to demo queue: {user_info}")
+            
             if self.demo_queue_collection is None:
+                logger.error("Demo queue collection not initialized")
                 raise Exception("Demo queue collection not initialized")
+            
+            # Validate required user info
+            if not user_info.get("name") or not user_info.get("email"):
+                logger.error(f"Missing required user info: {user_info}")
+                raise Exception("Name and email are required")
+            
+            # Test MongoDB connection
+            try:
+                self.demo_queue_collection.find_one()
+                logger.info("MongoDB connection test successful")
+            except Exception as db_test_error:
+                logger.error(f"MongoDB connection test failed: {db_test_error}")
+                raise Exception(f"Database connection failed: {str(db_test_error)}")
             
             # Generate unique session ID
             session_id = str(uuid.uuid4())
+            logger.info(f"Generated session ID: {session_id}")
             
             # Get current queue position
             queue_length = await self.get_current_queue_length()
             queue_position = queue_length + 1
+            logger.info(f"Current queue length: {queue_length}, new position: {queue_position}")
             
             # Estimate wait time (15-20 minutes per demo, assume 17.5 avg)
-            estimated_wait_time = queue_position * 17.5 if queue_position > 1 else 0
+            estimated_wait_time = (queue_position - 1) * 17.5 if queue_position > 1 else 0
             
             # Create queue entry
             queue_entry = {
                 "session_id": session_id,
-                "name": user_info.get("name", ""),
-                "email": user_info.get("email", ""),
-                "company": user_info.get("company", ""),
+                "name": user_info.get("name", "").strip(),
+                "email": user_info.get("email", "").strip().lower(),
+                "company": user_info.get("company", "").strip() if user_info.get("company") else "",
                 "interest_areas": user_info.get("interest_areas", []),
                 "timestamp": datetime.utcnow(),
                 "status": "waiting",
                 "queue_position": queue_position,
                 "estimated_wait_time": int(estimated_wait_time),
-                "notes": ""
+                "notes": "",
+                "created_via": "direct_api"  # Track how the entry was created
             }
+            
+            logger.info(f"Queue entry to insert: {queue_entry}")
             
             # Insert into database
             result = self.demo_queue_collection.insert_one(queue_entry)
             
-            logger.info(f"Added user {user_info.get('name')} to demo queue with session_id: {session_id}")
+            if result.inserted_id:
+                logger.info(f"Successfully inserted queue entry with MongoDB _id: {result.inserted_id}")
+                
+                # Verify the insertion
+                verification = self.demo_queue_collection.find_one({"session_id": session_id})
+                if verification:
+                    logger.info(f"Verification successful: Queue entry exists in database")
+                else:
+                    logger.error("Verification failed: Queue entry not found after insertion")
+                    raise Exception("Failed to verify queue entry insertion")
+                
+            else:
+                logger.error("Insert operation did not return an inserted_id")
+                raise Exception("Database insertion failed")
+            
+            logger.info(f"Successfully added {user_info.get('name')} to demo queue at position {queue_position}")
             
             return {
                 "success": True,
                 "session_id": session_id,
                 "queue_position": queue_position,
                 "estimated_wait_time": int(estimated_wait_time),
-                "queue_length": queue_length + 1
+                "queue_length": queue_length + 1,
+                "name": user_info.get("name"),
+                "message": f"Added to queue at position #{queue_position}"
             }
             
         except Exception as e:
-            logger.error(f"Error adding to demo queue: {e}")
+            logger.error(f"Error adding to demo queue: {str(e)}", exc_info=True)
             return {
                 "success": False,
-                "error": str(e)
+                "error": str(e),
+                "details": f"Failed to add {user_info.get('name', 'user')} to queue"
             }
     
     async def get_queue_status(self, session_id: str) -> Dict:
@@ -1749,6 +1788,85 @@ async def health_check() -> HealthResponse:
         document_count=doc_count,
         timestamp=datetime.utcnow().isoformat()
     )
+
+@app.get("/api/v1/debug/db-test")
+async def database_connection_test() -> Dict[str, Any]:
+    """Test database connections for debugging"""
+    try:
+        results = {}
+        
+        if not chatbot_service:
+            return {"success": False, "error": "Chatbot service not initialized"}
+        
+        # Test MongoDB connection
+        try:
+            if chatbot_service.mongo_client:
+                # Test connection
+                chatbot_service.mongo_client.admin.command('ping')
+                results["mongodb_connection"] = "✅ Connected"
+                
+                # Test database access
+                db_name = chatbot_service.db.name if chatbot_service.db else "Unknown"
+                results["database_name"] = db_name
+                
+                # Test pdf_chunks collection
+                if chatbot_service.pdf_chunks_collection:
+                    pdf_count = chatbot_service.pdf_chunks_collection.count_documents({})
+                    results["pdf_chunks_count"] = pdf_count
+                else:
+                    results["pdf_chunks_collection"] = "❌ Not initialized"
+                
+                # Test demo_queue collection
+                if chatbot_service.demo_queue_collection:
+                    queue_count = chatbot_service.demo_queue_collection.count_documents({})
+                    results["demo_queue_count"] = queue_count
+                    
+                    # Test a simple insert and delete
+                    test_doc = {
+                        "test": True,
+                        "timestamp": datetime.utcnow(),
+                        "session_id": "test-connection"
+                    }
+                    insert_result = chatbot_service.demo_queue_collection.insert_one(test_doc)
+                    if insert_result.inserted_id:
+                        results["demo_queue_insert_test"] = "✅ Insert successful"
+                        
+                        # Clean up test document
+                        delete_result = chatbot_service.demo_queue_collection.delete_one({"_id": insert_result.inserted_id})
+                        if delete_result.deleted_count == 1:
+                            results["demo_queue_delete_test"] = "✅ Delete successful"
+                        else:
+                            results["demo_queue_delete_test"] = "⚠️ Delete failed"
+                    else:
+                        results["demo_queue_insert_test"] = "❌ Insert failed"
+                else:
+                    results["demo_queue_collection"] = "❌ Not initialized"
+                    
+            else:
+                results["mongodb_connection"] = "❌ Client not initialized"
+                
+        except Exception as mongo_error:
+            results["mongodb_error"] = str(mongo_error)
+        
+        # Test environment variables
+        results["environment"] = {
+            "MONGODB_URI": "✅ Set" if os.getenv('MONGODB_URI') else "❌ Missing",
+            "MONGODB_DATABASE": os.getenv('MONGODB_DATABASE') or "❌ Missing",
+            "OPENAI_API_KEY": "✅ Set" if os.getenv('OPENAI_API_KEY') else "❌ Missing"
+        }
+        
+        results["success"] = True
+        results["timestamp"] = datetime.utcnow().isoformat()
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Database test failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
 
 @app.get("/api/v1/status")
 async def api_status() -> Dict[str, str]:
