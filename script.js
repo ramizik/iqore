@@ -23,13 +23,39 @@ document.addEventListener('DOMContentLoaded', function() {
     fetchWelcomeMessage();
 });
 
+// Comprehensive list of questions about iQore
+const ALL_IQORE_QUESTIONS = [
+    "What is iQore?",
+    "What is iQD?",
+    "What does \"physics-augmented\" mean?",
+    "Why are you at IEEE Quantum Week?",
+    "Who are your target customers?",
+    "How does iQD work?",
+    "What hardware does iQD support?",
+    "How is iQD different from other quantum optimizers?",
+    "Can iQD work alongside other quantum toolchains?",
+    "How do you prove your claims?",
+    "How does iQD improve fidelity?",
+    "What is \"coherence extension\" in iQD?",
+    "What's the overhead of running iQD?",
+    "How do I get iQD?",
+    "Who uses iQD today?",
+    "Will iQD work with future fault-tolerant QPUs?",
+    "How will iQore impact the quantum industry?",
+    "I want to see the demo",
+    "Tell me about your technology stack",
+    "What can I do here?"
+];
+
+// Function to get 3 random questions from the list
+function getRandomQuestions(count = 3) {
+    const shuffled = [...ALL_IQORE_QUESTIONS].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, count);
+}
+
 // Initial suggestions when chat starts
 function showInitialSuggestions() {
-    const initialSuggestions = [
-        "What is iQore?",
-        "What can I do here?",
-        "I want see the demo"
-    ];
+    const initialSuggestions = getRandomQuestions(3);
     updateSuggestions(initialSuggestions);
 }
 
@@ -78,25 +104,18 @@ function generateContextualSuggestions(userMessage) {
             "I have more questions about iQore",
             "I want to talk someone from iQore"
         ];
-    } else if (message.includes('application') || message.includes('use case')) {
-        return [
-            "What industries benefit from iQore?",
-            "Show me specific use cases",
-            "How does this compare to classical computing?"
-        ];
     } else if (message.includes('demo') || message.includes('demonstration')) {
-        return [
+        // Mix demo-specific suggestions with random iQore questions
+        const demoSuggestions = [
             "What is demo about?",
             "Show me the demo!",
             "What quantum algorithms iQore works with?"
         ];
+        const randomQuestions = getRandomQuestions(2);
+        return [...demoSuggestions.slice(0, 1), ...randomQuestions];
     } else {
-        // Default contextual suggestions
-        return [
-            "Can I see the demo?",
-            "Tell me about iQore",
-            "What can you do?"
-        ];
+        // Always show 3 random questions from our comprehensive list
+        return getRandomQuestions(3);
     }
 }
 
@@ -226,13 +245,10 @@ async function sendMessage() {
         
         addMessage(errorMessage, 'ai');
         
-        // Show general suggestions on error
+        // Show random suggestions on error
         setTimeout(() => {
-            updateSuggestions([
-                "Let me try a different question",
-                "What is iQore's main technology?",
-                "How can I learn more about iQore?"
-            ]);
+            const errorSuggestions = getRandomQuestions(3);
+            updateSuggestions(errorSuggestions);
         }, 500);
     } finally {
         setLoading(false);
