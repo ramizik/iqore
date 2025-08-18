@@ -71,12 +71,13 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 80px;
+    height: auto;
+    max-height: 120px;
 }
 
 .header-logo {
-    width: 100%;
-    height: 100%;
+    max-height: 100px;   /* or whatever looks good */
+    width: auto;
     object-fit: contain;
     filter: drop-shadow(0 4px 16px rgba(139, 69, 255, 0.3));
 }
