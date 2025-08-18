@@ -28,8 +28,8 @@ body {
 }
 
 .main-logo {
-    max-height: 90px;
-    width: 1500px;
+    max-height: 60px;
+    width: 800px;
     object-fit: cover;
     filter: drop-shadow(0 4px 16px rgba(139, 69, 255, 0.4));
 }
