@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import uvicorn
-from typing import Dict, List, Optional, Literal, Annotated
+from typing import Dict, List, Optional, Literal, Annotated, Any
 import logging
 import asyncio
 from datetime import datetime
@@ -1900,7 +1900,7 @@ async def update_demo_status(session_id: str, update_request: StaffQueueUpdateRe
         return UserQueueStatusResponse(success=False, error=str(e))
 
 @app.delete("/api/v1/staff/demo/queue/{session_id}")
-async def remove_from_queue(session_id: str) -> Dict[str, any]:
+async def remove_from_queue(session_id: str) -> Dict[str, Any]:
     """Remove entry from demo queue (staff only)"""
     try:
         result = await chatbot_service.remove_from_queue(session_id)
