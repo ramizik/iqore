@@ -183,23 +183,10 @@
                 <span class="stat-number" id="totalWaiting">-</span>
                 <div class="stat-label">People Waiting</div>
             </div>
-            <div class="stat-card">
-                <span class="stat-number" id="inProgress">-</span>
-                <div class="stat-label">Demos In Progress</div>
-            </div>
-            <div class="stat-card">
-                <span class="stat-number" id="completedToday">-</span>
-                <div class="stat-label">Completed Today</div>
-            </div>
-            <div class="stat-card">
-                <span class="stat-number" id="avgWaitTime">-</span>
-                <div class="stat-label">Avg Wait (min)</div>
-            </div>
         </div>
 
         <div class="controls">
             <button class="btn" onclick="refreshQueue()">🔄 Refresh Queue</button>
-            <button class="btn secondary" onclick="exportQueue()">📊 Export Data</button>
             <span id="lastUpdate" style="margin-left: 20px; color: #666; font-size: 0.9rem;"></span>
         </div>
 
@@ -240,11 +227,6 @@
 
         function updateStatsDisplay(data) {
             document.getElementById('totalWaiting').textContent = data.waiting_count || 0;
-            document.getElementById('inProgress').textContent = data.in_progress_count || 0;
-            document.getElementById('completedToday').textContent = data.completed_today || 0;
-            
-            const avgWait = data.waiting_count > 0 ? Math.round((data.waiting_count - 1) * 17.5) : 0;
-            document.getElementById('avgWaitTime').textContent = avgWait;
         }
 
         function updateQueueDisplay(entries) {
@@ -261,66 +243,19 @@
                         <div class="entry-name">${entry.name || 'Unknown'}</div>
                         <div class="entry-details">
                             ${entry.email || 'No email'} • ${entry.company || 'No company'}<br>
+                            ${entry.phone ? `📱 ${entry.phone} • ` : ''}
                             <span class="status-badge status-${entry.status.replace('_', '-')}">${entry.status.replace('_', ' ')}</span>
                             ${entry.queue_position ? `• Position: #${entry.queue_position}` : ''}
-                            ${entry.estimated_wait_time !== null ? `• Wait: ~${entry.estimated_wait_time}min` : ''}
                         </div>
                     </div>
                     <div class="entry-actions">
-                        ${entry.status === 'waiting' ? 
-                            `<button class="btn" onclick="startDemo('${entry.session_id}')">▶️ Start Demo</button>` :
-                            entry.status === 'in_progress' ? 
-                            `<button class="btn secondary" onclick="completeDemo('${entry.session_id}')">✅ Complete</button>` : ''
-                        }
                         <button class="btn danger" onclick="removeFromQueue('${entry.session_id}')">❌ Remove</button>
                     </div>
                 </div>
             `).join('');
         }
 
-        async function startDemo(sessionId) {
-            try {
-                const response = await fetch(`${API_BASE_URL}/api/v1/staff/demo/queue/${sessionId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        new_status: 'in_progress',
-                        notes: 'Demo started by admin'
-                    })
-                });
-                
-                const result = await response.json();
-                if (result.success) {
-                    refreshQueue();
-                } else {
-                    showError('Failed to start demo: ' + result.error);
-                }
-            } catch (error) {
-                showError('Error starting demo: ' + error.message);
-            }
-        }
 
-        async function completeDemo(sessionId) {
-            try {
-                const response = await fetch(`${API_BASE_URL}/api/v1/staff/demo/queue/${sessionId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        new_status: 'completed',
-                        notes: 'Demo completed by admin'
-                    })
-                });
-                
-                const result = await response.json();
-                if (result.success) {
-                    refreshQueue();
-                } else {
-                    showError('Failed to complete demo: ' + result.error);
-                }
-            } catch (error) {
-                showError('Error completing demo: ' + error.message);
-            }
-        }
 
         async function removeFromQueue(sessionId) {
             if (!confirm('Are you sure you want to remove this entry from the queue?')) return;
@@ -341,35 +276,7 @@
             }
         }
 
-        function exportQueue() {
-            if (!currentQueueData || !currentQueueData.queue_entries) {
-                alert('No data to export');
-                return;
-            }
 
-            const csvContent = [
-                ['Name', 'Email', 'Company', 'Status', 'Position', 'Wait Time', 'Timestamp'].join(','),
-                ...currentQueueData.queue_entries.map(entry => [
-                    entry.name || '',
-                    entry.email || '',
-                    entry.company || '',
-                    entry.status,
-                    entry.queue_position || '',
-                    entry.estimated_wait_time || '',
-                    entry.timestamp
-                ].map(field => `"${field}"`).join(','))
-            ].join('\n');
-
-            const blob = new Blob([csvContent], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `iqore-demo-queue-${new Date().toISOString().split('T')[0]}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-        }
 
         function showError(message) {
             const errorEl = document.getElementById('errorMessage');

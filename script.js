@@ -412,12 +412,8 @@ async function refreshQueueStatus() {
 
 function updateQueueDisplay(queueData) {
     const queueLengthEl = document.getElementById('queueLength');
-    const waitTimeEl = document.getElementById('waitTime');
-    const demoStatusEl = document.getElementById('demoStatus');
     
     if (queueLengthEl) queueLengthEl.textContent = queueData.total_queue_length || 0;
-    if (waitTimeEl) waitTimeEl.textContent = `${queueData.estimated_wait_time_minutes || 0} min`;
-    if (demoStatusEl) demoStatusEl.textContent = queueData.current_demo_in_progress ? 'Yes' : 'No';
     
     // Update queue message
     if (queueData.message) {
@@ -514,6 +510,7 @@ async function addToQueueDirectly(userInfo) {
                     name: userInfo.name,
                     email: userInfo.email,
                     company: userInfo.company || null,
+                    phone: userInfo.phone || null,
                     interest_areas: []
                 }
             })
@@ -552,7 +549,7 @@ async function addToQueueDirectly(userInfo) {
 
 function extractUserInfoFromHistory() {
     // Extract user info from recent chat history
-    const userInfo = { name: null, email: null, company: null };
+    const userInfo = { name: null, email: null, company: null, phone: null };
     
     // Look through recent chat history for user information
     const recentMessages = chatHistory.slice(-10); // Last 10 exchanges
@@ -591,6 +588,30 @@ function extractUserInfoFromHistory() {
                 const words = exchange.user.trim().split(/\s+/);
                 if (words.length >= 1 && words.length <= 4) {
                     userInfo.name = exchange.user.trim();
+                }
+            }
+            
+            // Extract phone number
+            const phonePatterns = [
+                /my phone is ([+]?[\d\s\-\(\)]{10,})/i,
+                /phone number is ([+]?[\d\s\-\(\)]{10,})/i,
+                /call me at ([+]?[\d\s\-\(\)]{10,})/i,
+                /number is ([+]?[\d\s\-\(\)]{10,})/i
+            ];
+            
+            for (const pattern of phonePatterns) {
+                const phoneMatch = exchange.user.match(pattern);
+                if (phoneMatch) {
+                    userInfo.phone = phoneMatch[1].trim();
+                    break;
+                }
+            }
+            
+            // If no phone pattern found, check if message looks like a standalone phone number
+            if (!userInfo.phone) {
+                const digitsOnly = exchange.user.replace(/\D/g, '');
+                if (digitsOnly.length >= 10 && exchange.user.length <= 20) {
+                    userInfo.phone = exchange.user.trim();
                 }
             }
             
@@ -681,11 +702,17 @@ async function tryQuickSignupForm() {
                            style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
                            placeholder="Enter your email address">
                 </div>
-                <div style="margin-bottom: 20px;">
+                <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #333;">Company (Optional)</label>
                     <input type="text" id="quickCompany"
                            style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
                            placeholder="Enter your company name">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #333;">Phone (Optional)</label>
+                    <input type="tel" id="quickPhone"
+                           style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
+                           placeholder="Enter your phone number">
                 </div>
                 <div style="display: flex; gap: 10px; justify-content: center;">
                     <button type="submit" 
@@ -714,12 +741,18 @@ async function tryQuickSignupForm() {
             const name = document.getElementById('quickName').value.trim();
             const email = document.getElementById('quickEmail').value.trim();
             const company = document.getElementById('quickCompany').value.trim();
+            const phone = document.getElementById('quickPhone').value.trim();
             
             if (name && email) {
                 document.body.removeChild(overlay);
                 resolve({
                     success: true,
-                    userInfo: { name, email, company: company || null }
+                    userInfo: { 
+                        name, 
+                        email, 
+                        company: company || null,
+                        phone: phone || null
+                    }
                 });
             }
         });

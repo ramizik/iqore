@@ -71,6 +71,7 @@ class VisitorInfo(BaseModel):
     name: str
     email: EmailStr
     company: Optional[str] = None
+    phone: Optional[str] = None
     interest_areas: List[str] = []
     
     @validator('name')
@@ -80,6 +81,15 @@ class VisitorInfo(BaseModel):
         if len(v) > 50:
             raise ValueError('Name must be less than 50 characters')
         return v.strip().title()
+    
+    @validator('phone')
+    def validate_phone(cls, v):
+        if v and len(v.strip()) > 0:
+            # Basic phone validation - remove non-digits and check length
+            digits_only = ''.join(filter(str.isdigit, v))
+            if len(digits_only) < 10:
+                raise ValueError('Phone number must contain at least 10 digits')
+        return v.strip() if v else None
 
 class DemoRequest(BaseModel):
     visitor_info: VisitorInfo
@@ -94,6 +104,7 @@ class DemoQueueEntry(BaseModel):
     name: str
     email: str
     company: Optional[str] = None
+    phone: Optional[str] = None
     interest_areas: List[str] = []
     status: DemoStatus
     timestamp: datetime
@@ -774,6 +785,17 @@ class ChatbotService:
             # Extract information from user's message
             extracted_info, info_complete = self._extract_user_info(latest_message.content, current_info)
             
+            # Check for phone skip patterns
+            phone_skip_patterns = ['skip', 'no phone', 'no thanks', 'not now', 'pass', 'none', 'no']
+            user_message_lower = latest_message.content.lower().strip()
+            
+            # If user is skipping phone and we have name+email, mark as complete
+            if (extracted_info.get('name') and extracted_info.get('email') and 
+                not extracted_info.get('phone') and 
+                any(skip_pattern in user_message_lower for skip_pattern in phone_skip_patterns)):
+                info_complete = True  # Mark as complete even without phone
+                logger.info("Demo agent: User skipped phone number, proceeding with name and email only")
+            
             # Update demo_user_info with extracted information
             state["demo_user_info"] = extracted_info
             
@@ -787,7 +809,8 @@ class ChatbotService:
                     f"Perfect! Let me confirm your details:\n"
                     f"📝 Name: {extracted_info['name']}\n"
                     f"📧 Email: {extracted_info['email']}\n"
-                    f"🏢 Company: {extracted_info.get('company', 'Not specified')}\n\n"
+                    f"🏢 Company: {extracted_info.get('company', 'Not specified')}\n"
+                    f"📱 Phone: {extracted_info.get('phone', 'Not provided')}\n\n"
                     f"I'll add you to our demo queue right away. Does this look correct?"
                 )
                 state["demo_state"] = "confirming"
@@ -1197,6 +1220,7 @@ class ChatbotService:
                     name=entry["name"],
                     email=entry["email"],
                     company=entry.get("company"),
+                    phone=entry.get("phone"),
                     interest_areas=entry.get("interest_areas", []),
                     status=DemoStatus(entry["status"]),
                     timestamp=entry["timestamp"],
@@ -1454,6 +1478,7 @@ class ChatbotService:
                 "name": user_info.get("name", "").strip(),
                 "email": user_info.get("email", "").strip().lower(),
                 "company": user_info.get("company", "").strip() if user_info.get("company") else "",
+                "phone": user_info.get("phone", "").strip() if user_info.get("phone") else "",
                 "interest_areas": user_info.get("interest_areas", []),
                 "timestamp": datetime.utcnow(),
                 "status": "waiting",
@@ -1604,19 +1629,6 @@ class ChatbotService:
                     if 1 <= len(words) <= 4:  # Reasonable name length
                         info['name'] = message.strip().title()
             
-            # Handle conversational responses about having email but not wanting to share it yet
-            if not info.get('email') and current_info.get('name') and not current_info.get('email'):
-                # Check if they mentioned email but didn't provide it
-                email_mention_patterns = [
-                    r"email",
-                    r"e-mail", 
-                    r"contact",
-                    r"reach me"
-                ]
-                if any(re.search(pattern, message_lower) for pattern in email_mention_patterns):
-                    # They mentioned email - they're responding to email request
-                    pass  # Will be handled by the email extraction above
-            
             # Extract email
             email_pattern = r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
             email_match = re.search(email_pattern, message)
@@ -1624,6 +1636,33 @@ class ChatbotService:
                 potential_email = email_match.group(0).lower()
                 if self._validate_email(potential_email):
                     info['email'] = potential_email
+            
+            # Extract phone number (look for various phone patterns)
+            phone_patterns = [
+                r"my phone is ([+]?[\d\s\-\(\)]{10,})",
+                r"phone number is ([+]?[\d\s\-\(\)]{10,})",
+                r"call me at ([+]?[\d\s\-\(\)]{10,})",
+                r"number is ([+]?[\d\s\-\(\)]{10,})",
+                # Also match standalone phone numbers
+                r"\b([+]?[\d\s\-\(\)]{10,})\b"
+            ]
+            
+            for pattern in phone_patterns:
+                phone_match = re.search(pattern, message)
+                if phone_match:
+                    potential_phone = phone_match.group(1).strip()
+                    # Basic validation - should have at least 10 digits
+                    digits_only = ''.join(filter(str.isdigit, potential_phone))
+                    if len(digits_only) >= 10:
+                        info['phone'] = potential_phone
+                        break
+            
+            # If no pattern found but message looks like a phone number
+            if not info.get('phone') and not current_info.get('phone'):
+                digits_only = ''.join(filter(str.isdigit, message.strip()))
+                if len(digits_only) >= 10 and len(message.strip()) <= 20:
+                    # Likely a phone number response
+                    info['phone'] = message.strip()
             
             # Extract company (look for patterns like "I work at", "from", "company is")
             company_patterns = [
@@ -1658,6 +1697,7 @@ class ChatbotService:
         try:
             has_name = bool(current_info.get('name'))
             has_email = bool(current_info.get('email'))
+            has_phone = bool(current_info.get('phone'))
             
             if not has_name and not has_email:
                 # Need both name and email
@@ -1677,10 +1717,17 @@ class ChatbotService:
                 return (
                     "Thanks for the email! And what's your name so I can properly add you to our demo queue?"
                 )
-            else:
-                # This shouldn't happen if info_complete logic is correct
+            elif has_name and has_email and not has_phone:
+                # Have name and email, ask for optional phone
+                name = current_info['name']
                 return (
-                    "I think I have your information! Let me confirm the details with you."
+                    f"Excellent, {name}! I have your name and email. "
+                    f"Would you also like to share your phone number? It's optional, but helps our assistants find you at the booth more easily."
+                )
+            else:
+                # Have all info or phone was provided/skipped
+                return (
+                    "Perfect! I have your information. Let me confirm the details with you."
                 )
                 
         except Exception as e:
@@ -1949,6 +1996,7 @@ async def create_demo_request(request: DemoRequest) -> UserQueueStatusResponse:
             "name": request.visitor_info.name,
             "email": request.visitor_info.email,
             "company": request.visitor_info.company,
+            "phone": request.visitor_info.phone,
             "interest_areas": request.visitor_info.interest_areas
         }
         result = await chatbot_service.add_to_demo_queue(user_info)
