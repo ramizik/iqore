@@ -573,14 +573,14 @@ async function requestDemo() {
                 await addToQueueDirectly(quickSignup.userInfo);
             } else {
                 // Fall back to conversational signup
-                const demoMessage = "I'd like to join the demo queue";
+    const demoMessage = "I'd like to join the demo queue";
                 await sendMessage(demoMessage);
                 // Queue message UI removed - no longer needed
             }
         }
-        
+    
         // Show queue widget if not already visible and start monitoring
-        showQueueWidget();
+    showQueueWidget();
         startQueueMonitoring();
         
     } catch (error) {
@@ -961,7 +961,7 @@ window.addEventListener('beforeunload', function() {
 // Export new functions for global access
 window.toggleQueueWidget = toggleQueueWidget;
 window.requestDemo = requestDemo;
-window.handleKeyDown = handleKeyDown;
+window.handleKeyDown = handleKeyDown; 
 window.handleManualRefresh = handleManualRefresh;
 
 // Note: refreshQueueStatus is kept for internal monitoring but not exposed globally 
