@@ -15,7 +15,6 @@ body {
 
 /* Top Logo Section */
 .top-logo-section {
-    position: absolute;
     top: 50px;
     left: 50%;
     transform: translateX(-50%);
