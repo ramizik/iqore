@@ -10,15 +10,10 @@
 <body>
     <div class="main-layout">
         <div class="chat-container">
-            <!-- Header with AI Avatar and Info -->
+            <!-- Header with iQore Logo -->
             <header class="chat-header">
-                <div class="ai-avatar">
-                    <img src="https://images.pexels.com/photos/8386440/pexels-photo-8386440.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop" alt="AI Avatar" class="avatar-image">
-                </div>
-                <div class="ai-info">
-                    <h1 class="ai-title">iQore AI</h1>
-                    <p class="ai-subtitle">Get Support & Ask Questions About iQore and our work</p>
-                    <p class="ai-description">Lorem ipsum</p>
+                <div class="logo-container">
+                    <img src="iqore-logo.png" alt="iQore Logo" class="header-logo">
                 </div>
             </header>
 
@@ -54,7 +49,7 @@
     <!-- Live Demo Queue Card - Appears to the right of chatbot when demo keywords detected -->
     <div class="demo-queue-card" id="queueStatusWidget" style="display: none;">
         <div class="queue-card-header">
-            <h3>🎯 Live Demo Queue</h3>
+            <h3>Live Demo Queue</h3>
             <button class="queue-close-btn" id="queueToggleBtn" onclick="toggleQueueWidget()">×</button>
         </div>
         <div class="queue-card-content" id="queueStatusContent">
@@ -64,14 +59,13 @@
             </div>
             <div class="queue-info">
                 <p><strong>Wait Time:</strong> 5-10 min</p>
-                <p><strong>Tip:</strong> Chat with me while you wait!</p>
             </div>
             <div class="queue-actions">
                 <button class="join-queue-btn" id="joinQueueBtn" onclick="requestDemo()">
                     Join Queue
                 </button>
                 <button class="refresh-queue-btn" id="refreshQueueBtn" onclick="handleManualRefresh()" title="Refresh queue status">
-                    🔄
+                    Refresh
                 </button>
             </div>
         </div>
