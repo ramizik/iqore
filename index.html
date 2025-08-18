@@ -74,9 +74,14 @@
                 <p><strong>Wait Time:</strong> 5-10 min</p>
                 <p><strong>Tip:</strong> Chat with me while you wait!</p>
             </div>
-            <button class="join-queue-btn" id="joinQueueBtn" onclick="requestDemo()">
-                Join Queue
-            </button>
+            <div class="queue-actions">
+                <button class="join-queue-btn" id="joinQueueBtn" onclick="requestDemo()">
+                    Join Queue
+                </button>
+                <button class="refresh-queue-btn" id="refreshQueueBtn" onclick="handleManualRefresh()" title="Refresh queue status">
+                    🔄
+                </button>
+            </div>
         </div>
     </div>
 </div>

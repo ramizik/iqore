@@ -515,6 +515,7 @@ body {
     color: #8b45ff;
     line-height: 1;
     margin-bottom: 4px;
+    transition: transform 0.2s ease, color 0.2s ease;
 }
 
 .count-label {
@@ -545,8 +546,14 @@ body {
     color: #ffffff;
 }
 
+.queue-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
 .join-queue-btn {
-    width: 100%;
+    flex: 1;
     padding: 12px 16px;
     background: linear-gradient(135deg, #8b45ff 0%, #6b73ff 100%);
     color: white;
@@ -566,6 +573,41 @@ body {
 
 .join-queue-btn:active {
     transform: translateY(0);
+}
+
+.refresh-queue-btn {
+    width: 40px;
+    height: 40px;
+    background: rgba(139, 69, 255, 0.1);
+    color: #8b45ff;
+    border: 1px solid rgba(139, 69, 255, 0.3);
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.refresh-queue-btn:hover {
+    background: rgba(139, 69, 255, 0.2);
+    border-color: rgba(139, 69, 255, 0.5);
+    transform: rotate(180deg);
+}
+
+.refresh-queue-btn:active {
+    transform: rotate(180deg) scale(0.95);
+}
+
+.refresh-queue-btn.loading {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
 

@@ -390,8 +390,16 @@ function stopQueueMonitoring() {
     }
 }
 
-async function refreshQueueStatus() {
+async function refreshQueueStatus(showLoadingState = false) {
+    const refreshBtn = document.getElementById('refreshQueueBtn');
+    
     try {
+        // Show loading state if requested (manual refresh)
+        if (showLoadingState && refreshBtn) {
+            refreshBtn.classList.add('loading');
+            refreshBtn.disabled = true;
+        }
+        
         const response = await fetch(QUEUE_STATUS_ENDPOINT, {
             method: 'GET',
             headers: {
@@ -408,22 +416,54 @@ async function refreshQueueStatus() {
         
         // Only update the display, don't auto-show widget unless it was already visible
         // Widget visibility is controlled by demo keyword detection only
+        
+        console.log('Queue status refreshed successfully');
 
     } catch (error) {
         console.error('Error fetching queue status:', error);
         // Queue message UI removed - errors logged to console
+    } finally {
+        // Remove loading state
+        if (showLoadingState && refreshBtn) {
+            setTimeout(() => {
+                refreshBtn.classList.remove('loading');
+                refreshBtn.disabled = false;
+            }, 500); // Brief delay to show the animation completed
+        }
     }
 }
 
 function updateQueueDisplay(queueData) {
     const queueLengthEl = document.getElementById('queueLength');
     
-    if (queueLengthEl) queueLengthEl.textContent = queueData.total_queue_length || 0;
+    if (queueLengthEl) {
+        const newCount = queueData.total_queue_length || 0;
+        const currentCount = parseInt(queueLengthEl.textContent) || 0;
+        
+        // Only animate if count changed
+        if (newCount !== currentCount) {
+            queueLengthEl.style.transform = 'scale(1.2)';
+            queueLengthEl.style.color = '#8b45ff';
+            
+            setTimeout(() => {
+                queueLengthEl.textContent = newCount;
+                queueLengthEl.style.transform = 'scale(1)';
+                queueLengthEl.style.color = '#8b45ff';
+            }, 150);
+        } else {
+            queueLengthEl.textContent = newCount;
+        }
+    }
     
     // Update queue message
     if (queueData.message) {
         updateQueueMessage(queueData.message, queueData.success ? 'success' : 'info');
     }
+}
+
+async function handleManualRefresh() {
+    // Handle manual refresh with loading state
+    await refreshQueueStatus(true);
 }
 
 function updateQueueMessage(message, type = 'info') {
@@ -526,6 +566,9 @@ async function addToQueueDirectly(userInfo) {
             
             // Start personalized updates
             startPersonalizedStatusUpdates();
+            
+            // Auto-refresh queue display to show updated status
+            await refreshQueueStatus();
             
             // Add success message to chat
             addSystemMessageToChat(
@@ -864,5 +907,6 @@ window.addEventListener('beforeunload', function() {
 window.toggleQueueWidget = toggleQueueWidget;
 window.requestDemo = requestDemo;
 window.handleKeyDown = handleKeyDown;
+window.handleManualRefresh = handleManualRefresh;
 
 // Note: refreshQueueStatus is kept for internal monitoring but not exposed globally 
