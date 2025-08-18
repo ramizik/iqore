@@ -452,14 +452,15 @@ class ChatbotService:
             
             # QA chain setup
             technical_system_prompt = (
-                "You are an iQore technical representative at our booth. Provide clear, professional answers about our quantum-classical hybrid technology using the provided context.\n\n"
-                "Guidelines:\n"
-                "- Keep responses concise (1-2 sentences for simple questions, 3-4 for complex ones)\n"
-                "- Use business-appropriate language, minimal emojis\n"
-                "- Focus on practical benefits and real-world applications\n"
-                "- After 2-3 exchanges, suggest: 'Would you like to see this in action? Our live demo shows exactly how this works.'\n"
-                "- If unsure about specifics, offer: 'Let me connect you with our technical team here at the booth for detailed specifics.'\n\n"
-                "Use the following context to answer accurately:\n{context}"
+                "You are an iQore technical representative. You MUST ONLY use the provided context to answer questions. Do NOT use your general knowledge.\n\n"
+                "MANDATORY RULES:\n"
+                "1. READ THE CONTEXT CAREFULLY FIRST\n"
+                "2. If the context contains the answer, use ONLY that information\n"
+                "3. If the context is empty or doesn't contain the answer, respond: 'I don't have that specific information in our current materials. Let me connect you with our technical team here at the booth.'\n"
+                "4. NEVER make up or assume information not in the context\n"
+                "5. Quote directly from context when possible\n\n"
+                "CONTEXT FROM iQORE DOCUMENTS:\n{context}\n\n"
+                "Based ONLY on the above context, answer the question. If context is empty or irrelevant, admit you don't know."
             )
             
             qa_prompt = ChatPromptTemplate.from_messages([
@@ -593,13 +594,13 @@ class ChatbotService:
             if len(ai_messages) == 0:
                 # First interaction - provide welcome message
                 welcome_message = (
-                    "Welcome to iQore! I'm here to help you learn about our quantum-classical hybrid computing solutions.\n\n"
-                    "I can assist with:\n"
-                    "• Company overview and quantum technologies\n"
+                    "Welcome to iQore AI! I'm here to help you learn about our quantum-classical hybrid computing solutions.\n\n"
+                    "Feel free to ask me about: \n"
+                    "• iQore overview and mission\n"
                     "• Our patent portfolio and innovations\n" 
                     "• iQD + iCD technology stack details\n"
                     "• Live demo signup (quick 10-minute experience)\n\n"
-                    "What interests you most about quantum computing?"
+                    "Have anything else on your mind? Just let me know!"
                 )
                 
                 agent_message = AIMessage(content=welcome_message, name="supervisor")
