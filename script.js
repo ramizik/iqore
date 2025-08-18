@@ -363,17 +363,24 @@ let userSessionId = null;
 
 // Initialize queue status checking
 document.addEventListener('DOMContentLoaded', function() {
-    // Start queue status monitoring
-    startQueueMonitoring();
+    // Don't start monitoring or show widget by default
+    // Widget will be shown only when demo keywords are detected in conversation
     
-    // Check if demo-related conversation has started
-    checkForDemoContext();
+    // Ensure widget is hidden on page load
+    hideQueueWidget();
 });
 
 function startQueueMonitoring() {
+    // Don't start if already monitoring
+    if (queueRefreshInterval) {
+        return;
+    }
+    
     // Check queue status every 30 seconds
     refreshQueueStatus();
     queueRefreshInterval = setInterval(refreshQueueStatus, 30000);
+    
+    console.log('Queue monitoring started');
 }
 
 function stopQueueMonitoring() {
@@ -399,14 +406,12 @@ async function refreshQueueStatus() {
         const data = await response.json();
         updateQueueDisplay(data);
         
-        // Show widget if there's queue activity or if user requested demo
-        if (data.total_queue_length > 0 || data.current_demo_in_progress || queueWidgetVisible) {
-            showQueueWidget();
-        }
+        // Only update the display, don't auto-show widget unless it was already visible
+        // Widget visibility is controlled by demo keyword detection only
 
     } catch (error) {
         console.error('Error fetching queue status:', error);
-        updateQueueMessage('Unable to fetch queue status', 'error');
+        // Queue message UI removed - errors logged to console
     }
 }
 
@@ -431,6 +436,7 @@ function showQueueWidget() {
         widget.style.display = 'block';
         widget.classList.add('show');
         queueWidgetVisible = true;
+        console.log('Queue widget is now visible');
     }
 }
 
@@ -441,6 +447,9 @@ function hideQueueWidget() {
         widget.classList.remove('show');
         queueWidgetVisible = false;
     }
+    
+    // Also stop monitoring when widget is hidden
+    stopQueueMonitoring();
 }
 
 function toggleQueueWidget() {
@@ -475,16 +484,17 @@ async function requestDemo() {
                 // Fall back to conversational signup
                 const demoMessage = "I'd like to join the demo queue";
                 await sendMessage(demoMessage);
-                updateQueueMessage('The AI will help you sign up! Please provide your name and email.', 'info');
+                // Queue message UI removed - no longer needed
             }
         }
         
-        // Show queue widget if not already visible
+        // Show queue widget if not already visible and start monitoring
         showQueueWidget();
+        startQueueMonitoring();
         
     } catch (error) {
         console.error('Error requesting demo:', error);
-        updateQueueMessage('Error requesting demo. Please try through chat.', 'error');
+        // Queue message UI removed - show error in chat instead
         
         // Fall back to conversational method
         const demoMessage = "I'd like to join the demo queue";
@@ -494,7 +504,7 @@ async function requestDemo() {
 
 async function addToQueueDirectly(userInfo) {
     try {
-        updateQueueMessage('Adding you to the demo queue...', 'info');
+        // Queue message UI removed - processing happens silently
         
         const response = await fetch(`${API_BASE_URL}/api/v1/demo/request`, {
             method: 'POST',
@@ -516,10 +526,7 @@ async function addToQueueDirectly(userInfo) {
         
         if (result.success) {
             userSessionId = result.session_id;
-            updateQueueMessage(
-                `✅ Success! You're #${result.queue_position} in queue. Wait time: ~${result.estimated_wait_time} min`,
-                'success'
-            );
+            // Queue message UI removed - no longer needed
             
             // Start personalized updates
             startPersonalizedStatusUpdates();
@@ -538,7 +545,7 @@ async function addToQueueDirectly(userInfo) {
         
     } catch (error) {
         console.error('Direct queue addition failed:', error);
-        updateQueueMessage('Direct signup failed. Please use the chat to sign up.', 'error');
+        // Queue message UI removed - error handling through chat fallback
         throw error;
     }
 }
@@ -779,33 +786,25 @@ async function tryQuickSignupForm() {
     });
 }
 
-function checkForDemoContext() {
-    // Check if recent chat history contains demo-related keywords
-    const demoKeywords = ['demo', 'demonstration', 'queue', 'signup', 'reserve'];
-    const recentMessages = chatHistory.slice(-5); // Check last 5 messages
-    
-    const hasDemoContext = recentMessages.some(msg => 
-        msg.user && demoKeywords.some(keyword => 
-            msg.user.toLowerCase().includes(keyword)
-        )
-    );
-    
-    if (hasDemoContext) {
-        showQueueWidget();
-    }
-}
+// Removed checkForDemoContext function - widget now shows only on active demo keyword detection
 
 // Monitor chat for demo-related conversations
 function monitorChatForDemo(userMessage, aiResponse) {
-    const demoKeywords = ['demo', 'demonstration', 'queue', 'signup', 'reserve', 'join'];
+    const demoKeywords = ['demo', 'demonstration', 'queue', 'signup', 'reserve', 'join', 'show me', 'live demo'];
     const message = (userMessage + ' ' + aiResponse).toLowerCase();
     
     const isDemoRelated = demoKeywords.some(keyword => message.includes(keyword));
     
     if (isDemoRelated) {
+        console.log('Demo keywords detected, showing queue widget');
+        
         setTimeout(() => {
+            // Show the queue widget for the first time
             showQueueWidget();
-            refreshQueueStatus();
+            
+            // Start queue monitoring now that demo conversation has begun
+            startQueueMonitoring();
+            
         }, 1000);
     }
     
@@ -830,10 +829,8 @@ function startPersonalizedStatusUpdates() {
             if (response.ok) {
                 const data = await response.json();
                 if (data.success) {
-                    updateQueueMessage(
-                        `Your position: #${data.queue_position} | Wait time: ~${data.estimated_wait_time} min`,
-                        'success'
-                    );
+                    // Queue message UI removed - position updates handled silently
+                    console.log(`Queue position: #${data.queue_position}, Wait time: ~${data.estimated_wait_time} min`);
                 }
             }
         } catch (error) {

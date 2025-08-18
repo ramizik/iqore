@@ -442,6 +442,8 @@ body {
     backdrop-filter: blur(10px);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     transition: all 0.3s ease;
+    /* Hidden by default, shown only when demo keywords are detected */
+    display: none;
 }
 
 .queue-status-widget.collapsed .queue-status-content {
@@ -617,6 +619,22 @@ body {
     background: rgba(245, 158, 11, 0.1);
     border-left-color: #f59e0b;
     color: #fbbf24;
+}
+
+/* Simple fade-in animation for queue widget */
+@keyframes fadeInWidget {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.queue-status-widget.show {
+    animation: fadeInWidget 0.3s ease-out;
 }
 
 /* Responsive adjustments */
