@@ -8,46 +8,19 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="chat-container">
-        <!-- Header with AI Avatar and Info -->
-        <header class="chat-header">
-            <div class="ai-avatar">
-                <img src="https://images.pexels.com/photos/8386440/pexels-photo-8386440.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop" alt="AI Avatar" class="avatar-image">
-            </div>
-            <div class="ai-info">
-                <h1 class="ai-title">iQore AI</h1>
-                <p class="ai-subtitle">Get Support & Ask Questions About iQore and our work</p>
-                <p class="ai-description">Lorem ipsum</p>
-            </div>
-        </header>
-
-        <!-- Phase 3: Demo Queue Status Widget - Hidden by default, shown when demo keywords detected -->
-        <div class="queue-status-widget" id="queueStatusWidget" style="display: none;">
-            <div class="queue-status-header">
-                <h3>🎯 Live Demo Queue</h3>
-                <button class="queue-toggle-btn" id="queueToggleBtn" onclick="toggleQueueWidget()">−</button>
-            </div>
-            <div class="queue-status-content" id="queueStatusContent">
-                <div class="queue-metrics">
-                    <div class="queue-metric">
-                        <span class="metric-label">People Waiting</span>
-                        <span class="metric-value" id="queueLength">0</span>
-                    </div>
+    <div class="main-layout">
+        <div class="chat-container">
+            <!-- Header with AI Avatar and Info -->
+            <header class="chat-header">
+                <div class="ai-avatar">
+                    <img src="https://images.pexels.com/photos/8386440/pexels-photo-8386440.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop" alt="AI Avatar" class="avatar-image">
                 </div>
-                <div class="queue-info-text">
-                    <p>⏱️ <strong>Wait Time:</strong> Typically 5-10 minutes</p>
-                    <p>💬 <strong>While you wait:</strong> Feel free to chat with me about iQore's quantum computing technology and hang around our booth - our assistants will find you when it's your turn!</p>
+                <div class="ai-info">
+                    <h1 class="ai-title">iQore AI</h1>
+                    <p class="ai-subtitle">Get Support & Ask Questions About iQore and our work</p>
+                    <p class="ai-description">Lorem ipsum</p>
                 </div>
-                <div class="queue-actions">
-                    <button class="queue-action-btn primary" id="joinQueueBtn" onclick="requestDemo()">
-                        🎯 Join Demo Queue
-                    </button>
-                    <button class="queue-action-btn secondary" id="refreshQueueBtn" onclick="refreshQueueStatus()">
-                        🔄 Refresh Status
-                    </button>
-                </div>
-            </div>
-        </div>
+            </header>
 
         <!-- Chat Messages Area -->
         <main class="chat-main">
@@ -86,6 +59,28 @@
         </footer>
     </div>
 
-    <script src="script.js"></script>
+    <!-- Live Demo Queue Card - Appears to the right of chatbot when demo keywords detected -->
+    <div class="demo-queue-card" id="queueStatusWidget" style="display: none;">
+        <div class="queue-card-header">
+            <h3>🎯 Live Demo Queue</h3>
+            <button class="queue-close-btn" id="queueToggleBtn" onclick="toggleQueueWidget()">×</button>
+        </div>
+        <div class="queue-card-content" id="queueStatusContent">
+            <div class="queue-count">
+                <span class="count-number" id="queueLength">0</span>
+                <span class="count-label">People Waiting</span>
+            </div>
+            <div class="queue-info">
+                <p><strong>Wait Time:</strong> 5-10 min</p>
+                <p><strong>Tip:</strong> Chat with me while you wait!</p>
+            </div>
+            <button class="join-queue-btn" id="joinQueueBtn" onclick="requestDemo()">
+                Join Queue
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="script.js"></script>
 </body>
 </html>

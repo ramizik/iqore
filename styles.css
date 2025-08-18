@@ -13,21 +13,30 @@ body {
     overflow: hidden;
 }
 
+/* Main Layout - Side by side chatbot and queue card */
+.main-layout {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 20px;
+    height: 100vh;
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
 /* Chat Container */
 .chat-container {
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    max-width: 800px;
-    margin: 0 auto;
+    height: calc(100vh - 40px);
+    width: 800px;
     background: rgba(16, 12, 70, 0.3);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(139, 69, 255, 0.3);
     border-radius: 24px;
     overflow: hidden;
-    margin-top: 20px;
-    margin-bottom: 20px;
-    height: calc(100vh - 40px);
+    flex-shrink: 0;
 }
 
 /* Header */
@@ -433,222 +442,181 @@ body {
     }
 }
 
-/* Phase 3: Demo Queue Status Widget Styles */
-.queue-status-widget {
-    background: linear-gradient(135deg, rgba(45, 27, 105, 0.9) 0%, rgba(26, 11, 46, 0.9) 100%);
-    margin: 16px;
+/* Demo Queue Card - Compact card positioned to the right of chatbot */
+.demo-queue-card {
+    width: 280px;
+    background: rgba(16, 12, 70, 0.95);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(139, 69, 255, 0.4);
     border-radius: 16px;
-    border: 1px solid rgba(139, 69, 255, 0.3);
-    backdrop-filter: blur(10px);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    transition: all 0.3s ease;
+    position: relative;
+    margin-top: 80px;
+    flex-shrink: 0;
     /* Hidden by default, shown only when demo keywords are detected */
     display: none;
 }
 
-.queue-status-widget.collapsed .queue-status-content {
-    display: none;
-}
-
-.queue-status-header {
+.queue-card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 20px;
-    border-bottom: 1px solid rgba(139, 69, 255, 0.2);
+    padding: 16px;
+    border-bottom: 1px solid rgba(139, 69, 255, 0.3);
+    background: linear-gradient(135deg, rgba(139, 69, 255, 0.1) 0%, rgba(107, 115, 255, 0.1) 100%);
+    border-radius: 16px 16px 0 0;
 }
 
-.queue-status-header h3 {
+.queue-card-header h3 {
     font-size: 16px;
     font-weight: 600;
     color: #ffffff;
     margin: 0;
 }
 
-.queue-toggle-btn {
+.queue-close-btn {
     background: none;
     border: none;
     color: rgba(255, 255, 255, 0.6);
-    font-size: 20px;
+    font-size: 18px;
     font-weight: bold;
     cursor: pointer;
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
 }
 
-.queue-toggle-btn:hover {
-    background: rgba(139, 69, 255, 0.1);
-    color: rgba(255, 255, 255, 0.8);
+.queue-close-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
 }
 
-.queue-status-content {
+.queue-card-content {
     padding: 20px;
 }
 
-.queue-metrics {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 16px;
-    margin-bottom: 16px;
-}
-
-.queue-info-text {
-    background: rgba(139, 69, 255, 0.05);
-    padding: 16px;
-    border-radius: 8px;
-    border-left: 3px solid #8b45ff;
-    margin-bottom: 20px;
-}
-
-.queue-info-text p {
-    margin: 0 0 8px 0;
-    font-size: 13px;
-    line-height: 1.4;
-    color: rgba(255, 255, 255, 0.8);
-}
-
-.queue-info-text p:last-child {
-    margin-bottom: 0;
-}
-
-.queue-info-text strong {
-    color: #ffffff;
-}
-
-.queue-metric {
+.queue-count {
     text-align: center;
-    padding: 12px;
-    background: rgba(139, 69, 255, 0.1);
+    margin-bottom: 16px;
+    padding: 16px;
+    background: rgba(139, 69, 255, 0.15);
     border-radius: 12px;
-    border: 1px solid rgba(139, 69, 255, 0.2);
+    border: 1px solid rgba(139, 69, 255, 0.3);
 }
 
-.metric-label {
+.count-number {
+    display: block;
+    font-size: 32px;
+    font-weight: 700;
+    color: #8b45ff;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.count-label {
     display: block;
     font-size: 12px;
     font-weight: 500;
-    color: rgba(255, 255, 255, 0.6);
-    margin-bottom: 4px;
+    color: rgba(255, 255, 255, 0.7);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-.metric-value {
-    display: block;
-    font-size: 18px;
-    font-weight: 700;
+.queue-info {
+    margin-bottom: 16px;
+}
+
+.queue-info p {
+    margin: 0 0 6px 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.queue-info p:last-child {
+    margin-bottom: 0;
+}
+
+.queue-info strong {
     color: #ffffff;
 }
 
-.queue-actions {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-}
-
-.queue-action-btn {
-    flex: 1;
-    min-width: 140px;
-    padding: 12px 20px;
-    border-radius: 12px;
+.join-queue-btn {
+    width: 100%;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #8b45ff 0%, #6b73ff 100%);
+    color: white;
     border: none;
+    border-radius: 8px;
     font-weight: 600;
     font-size: 14px;
     cursor: pointer;
     transition: all 0.2s ease;
-    text-transform: capitalize;
+    box-shadow: 0 4px 16px rgba(139, 69, 255, 0.3);
 }
 
-.queue-action-btn.primary {
-    background: linear-gradient(135deg, #8b45ff 0%, #6b73ff 100%);
-    color: white;
-    box-shadow: 0 4px 16px rgba(139, 69, 255, 0.4);
+.join-queue-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(139, 69, 255, 0.4);
 }
 
-.queue-action-btn.primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(139, 69, 255, 0.5);
-}
-
-.queue-action-btn.primary:active {
+.join-queue-btn:active {
     transform: translateY(0);
 }
 
-.queue-action-btn.secondary {
-    background: rgba(139, 69, 255, 0.1);
-    color: #8b45ff;
-    border: 1px solid rgba(139, 69, 255, 0.3);
-}
 
-.queue-action-btn.secondary:hover {
-    background: rgba(139, 69, 255, 0.2);
-    border-color: rgba(139, 69, 255, 0.5);
-}
 
-.queue-message {
-    font-size: 13px;
-    line-height: 1.4;
-    color: rgba(255, 255, 255, 0.7);
-    padding: 12px;
-    background: rgba(139, 69, 255, 0.05);
-    border-radius: 8px;
-    border-left: 3px solid #8b45ff;
-    margin-top: 8px;
-    min-height: 20px;
-}
-
-.queue-message.success {
-    background: rgba(34, 197, 94, 0.1);
-    border-left-color: #22c55e;
-    color: #86efac;
-}
-
-.queue-message.error {
-    background: rgba(239, 68, 68, 0.1);
-    border-left-color: #ef4444;
-    color: #fca5a5;
-}
-
-.queue-message.warning {
-    background: rgba(245, 158, 11, 0.1);
-    border-left-color: #f59e0b;
-    color: #fbbf24;
-}
-
-/* Simple fade-in animation for queue widget */
-@keyframes fadeInWidget {
+/* Simple fade-in animation for demo queue card */
+@keyframes fadeInCard {
     from {
         opacity: 0;
-        transform: translateY(-10px);
+        transform: translateX(20px);
     }
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateX(0);
     }
 }
 
-.queue-status-widget.show {
-    animation: fadeInWidget 0.3s ease-out;
+.demo-queue-card.show {
+    animation: fadeInCard 0.4s ease-out;
 }
 
 /* Responsive adjustments */
-@media (max-width: 768px) {
-    .queue-metrics {
-        grid-template-columns: 1fr;
-        gap: 12px;
-    }
-    
-    .queue-actions {
+@media (max-width: 1200px) {
+    .main-layout {
         flex-direction: column;
+        align-items: center;
     }
     
-    .queue-action-btn {
-        min-width: unset;
+    .demo-queue-card {
+        margin-top: 0;
+        width: 100%;
+        max-width: 400px;
+    }
+    
+    .chat-container {
+        width: 100%;
+        max-width: 800px;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-layout {
+        padding: 10px;
+        gap: 15px;
+    }
+    
+    .chat-container {
+        height: calc(100vh - 20px);
+    }
+    
+    .demo-queue-card {
+        width: 100%;
+        max-width: 100%;
     }
 }

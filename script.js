@@ -454,14 +454,10 @@ function hideQueueWidget() {
 
 function toggleQueueWidget() {
     const widget = document.getElementById('queueStatusWidget');
-    const toggleBtn = document.getElementById('queueToggleBtn');
     
-    if (widget.classList.contains('collapsed')) {
-        widget.classList.remove('collapsed');
-        if (toggleBtn) toggleBtn.textContent = '−';
-    } else {
-        widget.classList.add('collapsed');
-        if (toggleBtn) toggleBtn.textContent = '+';
+    // Close/hide the queue card completely
+    if (widget) {
+        hideQueueWidget();
     }
 }
 
@@ -866,6 +862,7 @@ window.addEventListener('beforeunload', function() {
 
 // Export new functions for global access
 window.toggleQueueWidget = toggleQueueWidget;
-window.refreshQueueStatus = refreshQueueStatus;
 window.requestDemo = requestDemo;
-window.handleKeyDown = handleKeyDown; 
+window.handleKeyDown = handleKeyDown;
+
+// Note: refreshQueueStatus is kept for internal monitoring but not exposed globally 
