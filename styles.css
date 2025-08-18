@@ -30,7 +30,7 @@ body {
 .main-logo {
     max-height: 90px;
     width: 1500px;
-    object-fit: fill-box;
+    object-fit: cover;
     filter: drop-shadow(0 4px 16px rgba(139, 69, 255, 0.4));
 }
 
