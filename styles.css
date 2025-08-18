@@ -75,9 +75,8 @@ body {
 }
 
 .header-logo {
-    max-width: 60%;   /* scales with header width */
     height: auto;
-    width: auto;
+    width: 300px;
     object-fit: contain;
     filter: drop-shadow(0 4px 16px rgba(139, 69, 255, 0.3));
 }
