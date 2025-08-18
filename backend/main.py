@@ -6,7 +6,7 @@ import uvicorn
 from typing import Dict, List, Optional, Literal, Annotated, Any
 import logging
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 import operator
 import uuid
@@ -341,6 +341,8 @@ class ChatbotService:
         self.pdf_chunks_collection = None
         # Phase 2: Initialize demo queue collection reference
         self.demo_queue_collection = None
+        # Initialize demo_done collection reference
+        self.demo_done_collection = None
         self.multi_agent_graph = None
         self.llm = None
         # Phase 2: Initialize LangChain tools
@@ -376,6 +378,8 @@ class ChatbotService:
             self.pdf_chunks_collection = self.db['pdf_chunks']
             # Phase 2: Initialize demo queue collection
             self.demo_queue_collection = self.db['demo_queue']
+            # Initialize demo_done collection for completed/removed demos
+            self.demo_done_collection = self.db['demo_done']
             
             # Check if there are documents in the collection
             doc_count = self.pdf_chunks_collection.count_documents({})
@@ -387,6 +391,10 @@ class ChatbotService:
             # Phase 2: Check demo queue collection
             demo_queue_count = self.demo_queue_collection.count_documents({})
             logger.info(f"Demo queue initialized with {demo_queue_count} existing entries")
+            
+            # Check demo_done collection
+            demo_done_count = self.demo_done_collection.count_documents({})
+            logger.info(f"Demo done collection initialized with {demo_done_count} completed entries")
             
             # Initialize the traditional RAG chain for technical agent
             await self._initialize_rag_chain()
@@ -1295,25 +1303,99 @@ class ChatbotService:
             return {"success": False, "error": str(e)}
 
     async def remove_from_queue(self, session_id: str) -> Dict:
-        """Remove entry from demo queue"""
+        """Remove entry from demo queue and save to demo_done collection"""
         try:
             if self.demo_queue_collection is None:
                 return {"success": False, "error": "Demo queue collection not available"}
             
-            # Remove the entry
+            if self.demo_done_collection is None:
+                return {"success": False, "error": "Demo done collection not available"}
+            
+            # First, get the entry to save its data
+            entry = self.demo_queue_collection.find_one({"session_id": session_id})
+            
+            if not entry:
+                return {"success": False, "error": "Session not found in queue"}
+            
+            # Prepare the entry for demo_done collection
+            demo_done_entry = {
+                "session_id": entry.get("session_id"),
+                "name": entry.get("name"),
+                "email": entry.get("email"),
+                "company": entry.get("company", ""),
+                "phone": entry.get("phone", ""),
+                "interest_areas": entry.get("interest_areas", []),
+                "original_timestamp": entry.get("timestamp"),  # When they originally joined queue
+                "queue_position": entry.get("queue_position"),
+                "estimated_wait_time": entry.get("estimated_wait_time"),
+                "status": entry.get("status"),  # Their status when removed
+                "notes": entry.get("notes", ""),
+                "created_via": entry.get("created_via", "unknown"),
+                "completed_at": datetime.utcnow(),  # When they were removed/completed
+                "removed_by": "admin"  # Indicate this was an admin action
+            }
+            
+            # Save to demo_done collection
+            save_result = self.demo_done_collection.insert_one(demo_done_entry)
+            
+            if not save_result.inserted_id:
+                logger.error(f"Failed to save demo entry to demo_done collection for session {session_id}")
+                return {"success": False, "error": "Failed to save demo completion data"}
+            
+            logger.info(f"Saved demo entry to demo_done collection: {session_id}, user: {entry.get('name')}")
+            
+            # Now remove the entry from the queue
             result = self.demo_queue_collection.delete_one({"session_id": session_id})
             
             if result.deleted_count > 0:
                 return {
                     "success": True,
-                    "message": "Entry removed from demo queue",
-                    "session_id": session_id
+                    "message": f"Entry removed from demo queue and saved to completion records",
+                    "session_id": session_id,
+                    "user_name": entry.get("name"),
+                    "saved_to_done": True
                 }
             else:
-                return {"success": False, "error": "Session not found in queue"}
+                # If deletion failed, we should probably remove from demo_done as well
+                # to maintain consistency
+                self.demo_done_collection.delete_one({"session_id": session_id, "completed_at": demo_done_entry["completed_at"]})
+                return {"success": False, "error": "Failed to remove from queue after saving completion data"}
                 
         except Exception as e:
             logger.error(f"Error removing from queue: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def get_demo_done_stats(self) -> Dict:
+        """Get statistics from demo_done collection"""
+        try:
+            if self.demo_done_collection is None:
+                return {"success": False, "error": "Demo done collection not available"}
+            
+            # Get total completed demos
+            total_completed = self.demo_done_collection.count_documents({})
+            
+            # Get completed demos today
+            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_completed = self.demo_done_collection.count_documents({
+                "completed_at": {"$gte": today_start}
+            })
+            
+            # Get completed demos this week
+            week_start = today_start - timedelta(days=7)
+            week_completed = self.demo_done_collection.count_documents({
+                "completed_at": {"$gte": week_start}
+            })
+            
+            return {
+                "success": True,
+                "total_completed": total_completed,
+                "completed_today": today_completed,
+                "completed_this_week": week_completed,
+                "collection_available": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting demo done stats: {e}")
             return {"success": False, "error": str(e)}
 
     async def get_response(self, message: str, chat_history: List[Dict[str, str]]) -> Dict:
@@ -2067,12 +2149,22 @@ async def update_demo_status(session_id: str, update_request: StaffQueueUpdateRe
 
 @app.delete("/api/v1/staff/demo/queue/{session_id}")
 async def remove_from_queue(session_id: str) -> Dict[str, Any]:
-    """Remove entry from demo queue (staff only)"""
+    """Remove entry from demo queue and save to demo_done collection (staff only)"""
     try:
         result = await chatbot_service.remove_from_queue(session_id)
         return result
     except Exception as e:
         logger.error(f"Error removing from queue: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/v1/staff/demo/done-stats")
+async def get_demo_done_statistics() -> Dict[str, Any]:
+    """Get statistics from completed demos (staff only)"""
+    try:
+        result = await chatbot_service.get_demo_done_stats()
+        return result
+    except Exception as e:
+        logger.error(f"Error getting demo done stats: {e}")
         return {"success": False, "error": str(e)}
 
 @app.post("/api/v1/chat", response_model=ChatResponse)
