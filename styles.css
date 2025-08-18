@@ -619,22 +619,6 @@ body {
     color: #fbbf24;
 }
 
-/* Queue Widget Animation */
-@keyframes slideInQueue {
-    from {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.queue-status-widget.show {
-    animation: slideInQueue 0.3s ease-out;
-}
-
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .queue-metrics {

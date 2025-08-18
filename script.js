@@ -422,11 +422,7 @@ function updateQueueDisplay(queueData) {
 }
 
 function updateQueueMessage(message, type = 'info') {
-    const messageEl = document.getElementById('queueMessage');
-    if (messageEl) {
-        messageEl.textContent = message;
-        messageEl.className = `queue-message ${type}`;
-    }
+    // Queue message UI removed - no longer needed
 }
 
 function showQueueWidget() {
