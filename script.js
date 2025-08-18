@@ -19,6 +19,8 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('iQore Chatbot Frontend initialized');
     messageInput.focus();
     showInitialSuggestions();
+    // Fetch initial welcome message from backend
+    fetchWelcomeMessage();
 });
 
 // Initial suggestions when chat starts
@@ -29,6 +31,40 @@ function showInitialSuggestions() {
         "I want see the demo"
     ];
     updateSuggestions(initialSuggestions);
+}
+
+// Fetch welcome message from backend
+async function fetchWelcomeMessage() {
+    try {
+        // Send an empty first message to trigger the welcome response
+        const response = await fetch(CHAT_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            mode: 'cors',
+            body: JSON.stringify({
+                message: "Hello",  // Simple greeting to trigger welcome
+                chat_history: []
+            })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            // Add the welcome message to the chat
+            addMessage(data.response, 'ai');
+            // Update chat history
+            chatHistory = data.chat_history || [];
+        } else {
+            // Fallback welcome message if backend is unavailable
+            addMessage("Welcome to iQore! I'm here to help you learn about our quantum-classical hybrid computing innovations. What would you like to know?", 'ai');
+        }
+    } catch (error) {
+        console.error('Error fetching welcome message:', error);
+        // Fallback welcome message on error
+        addMessage("Welcome to iQore! I'm here to help you learn about our quantum-classical hybrid computing innovations. What would you like to know?", 'ai');
+    }
 }
 
 // Generate contextual suggestions based on the user's message
