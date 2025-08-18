@@ -16,14 +16,21 @@ ENV MONGODB_DATABASE=${MONGODB_DATABASE}
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Install system dependencies
+# Fix locale/encoding issues for Click/Uvicorn
+ENV LC_ALL=C.UTF-8
+ENV LANG=C.UTF-8
+ENV PYTHONIOENCODING=utf-8
+
+# Install system dependencies including locales
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     curl \
     git \
     build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    locales \
+    && rm -rf /var/lib/apt/lists/* \
+    && locale-gen C.UTF-8
 
 # Copy requirements first for better caching
 COPY requirements.txt .
@@ -41,9 +48,10 @@ EXPOSE 8080
 # Set environment variable for port (Cloud Run will provide PORT=8080)
 ENV PORT=8080
 
-# Health check
+# Health check (matches our /health endpoint)
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/healthz || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
-# Run the application directly with uvicorn (matching vocal AI approach)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"] 
+# Make start script executable and use it to run the app (ensures proper locale)
+RUN chmod +x start.sh
+CMD ["./start.sh"] 
