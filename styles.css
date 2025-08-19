@@ -539,11 +539,10 @@ body {
 .refresh-queue-btn:hover {
     background: rgba(80, 40, 150, 0.3);
     border-color: rgba(80, 40, 150, 0.6);
-    transform: rotate(180deg);
 }
 
 .refresh-queue-btn:active {
-    transform: rotate(180deg) scale(0.95);
+    transform: scale(0.95);
 }
 
 .refresh-queue-btn.loading {
