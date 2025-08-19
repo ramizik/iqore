@@ -438,6 +438,7 @@ const DEMO_REQUEST_ENDPOINT = `${API_BASE_URL}/api/v1/demo/request`;
 
 // Queue widget state
 let queueWidgetVisible = false;
+let calendlyWidgetVisible = false; // Add this line
 let queueRefreshInterval = null;
 let userSessionId = null;
 
@@ -557,6 +558,11 @@ function showQueueWidget() {
         widget.classList.add('show');
         queueWidgetVisible = true;
         console.log('Queue widget is now visible');
+        
+        // Also show Calendly widget
+        setTimeout(() => {
+            showCalendlyWidget();
+        }, 300); // Small delay for smoother animation
     }
 }
 
@@ -567,6 +573,9 @@ function hideQueueWidget() {
         widget.classList.remove('show');
         queueWidgetVisible = false;
     }
+    
+    // Also hide Calendly widget
+    hideCalendlyWidget();
     
     // Also stop monitoring when widget is hidden
     stopQueueMonitoring();
@@ -983,6 +992,7 @@ window.addEventListener('beforeunload', function() {
 
 // Export new functions for global access
 window.toggleQueueWidget = toggleQueueWidget;
+window.toggleCalendlyWidget = toggleCalendlyWidget; // Add this line
 window.requestDemo = requestDemo;
 window.handleKeyDown = handleKeyDown; 
 window.handleManualRefresh = handleManualRefresh;
@@ -1120,4 +1130,75 @@ function restartSession() {
     messageInput.focus();
     
     console.log('Session restarted by user');
+}
+
+// Add Calendly widget functions
+function showCalendlyWidget() {
+    const widget = document.getElementById('calendlyWidget');
+    if (widget && !calendlyWidgetVisible) {
+        widget.style.display = 'block';
+        widget.classList.add('show');
+        calendlyWidgetVisible = true;
+        console.log('Calendly widget is now visible');
+    }
+}
+
+function hideCalendlyWidget() {
+    const widget = document.getElementById('calendlyWidget');
+    if (widget) {
+        widget.style.display = 'none';
+        widget.classList.remove('show');
+        calendlyWidgetVisible = false;
+    }
+}
+
+function toggleCalendlyWidget() {
+    const widget = document.getElementById('calendlyWidget');
+    
+    // Close/hide the Calendly widget completely
+    if (widget) {
+        hideCalendlyWidget();
+    }
+}
+
+// Update existing showQueueWidget function
+function showQueueWidget() {
+    const widget = document.getElementById('queueStatusWidget');
+    if (widget && !queueWidgetVisible) {
+        widget.style.display = 'block';
+        widget.classList.add('show');
+        queueWidgetVisible = true;
+        console.log('Queue widget is now visible');
+        
+        // Also show Calendly widget with a small delay for smoother animation
+        setTimeout(() => {
+            showCalendlyWidget();
+        }, 300);
+    }
+}
+
+// Update existing hideQueueWidget function
+function hideQueueWidget() {
+    const widget = document.getElementById('queueStatusWidget');
+    if (widget) {
+        widget.style.display = 'none';
+        widget.classList.remove('show');
+        queueWidgetVisible = false;
+    }
+    
+    // Also hide Calendly widget
+    hideCalendlyWidget();
+    
+    // Also stop monitoring when widget is hidden
+    stopQueueMonitoring();
+}
+
+// Update existing toggleQueueWidget function
+function toggleQueueWidget() {
+    const widget = document.getElementById('queueStatusWidget');
+    
+    // Close/hide the queue card completely
+    if (widget) {
+        hideQueueWidget();
+    }
 }

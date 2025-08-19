@@ -545,8 +545,7 @@ class ChatbotService:
         message_lower = message.lower()
         
         # Demo intent detection - enhanced for on-site demo mentions
-        demo_keywords = ['demo', 'demonstration', 'show me', 'see the demo', 'live demo', 'preview', 
-                        'queue', 'line', 'wait', 'on-site', 'booth', 'laptop']
+        demo_keywords = ['demo', 'demonstration', 'see the demo', 'live demo']
         if any(keyword in message_lower for keyword in demo_keywords):
             return "demo_agent"
         

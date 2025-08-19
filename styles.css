@@ -669,7 +669,82 @@ body {
     animation: fadeInCard 0.4s ease-out;
 }
 
-/* Responsive adjustments */
+/* Calendly Widget - positioned under demo queue card */
+.calendly-widget-container {
+    width: 280px;
+    background: rgba(25, 25, 25, 0.95);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(80, 40, 150, 0.4);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    margin-top: 20px;
+    flex-shrink: 0;
+    /* Hidden by default, shown only when demo keywords are detected */
+    display: none;
+}
+
+.calendly-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid rgba(80, 40, 150, 0.4);
+    background: rgba(40, 40, 40, 0.6);
+    border-radius: 16px 16px 0 0;
+}
+
+.calendly-card-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #ffffff;
+    margin: 0;
+}
+
+.calendly-close-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.calendly-close-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.calendly-content {
+    padding: 0;
+    border-radius: 0 0 16px 16px;
+    overflow: hidden;
+}
+
+/* Override Calendly iframe styles to match our theme */
+.calendly-inline-widget {
+    border-radius: 0 0 16px 16px !important;
+    background: transparent !important;
+}
+
+.calendly-inline-widget iframe {
+    border-radius: 0 0 16px 16px !important;
+}
+
+/* Update main layout to accommodate both widgets */
+@media (min-width: 1200px) {
+    .main-layout {
+        max-width: 1500px; /* Increased to accommodate both widgets */
+    }
+}
+
+/* Responsive adjustments for Calendly widget */
 @media (max-width: 1200px) {
     .main-layout {
         flex-direction: column;
@@ -690,6 +765,16 @@ body {
     .chat-container {
         width: 100%;
         max-width: 800px;
+    }
+
+    .calendly-widget-container {
+        width: 100%;
+        max-width: 400px;
+        margin-top: 15px;
+    }
+    
+    .calendly-inline-widget {
+        min-width: 100% !important;
     }
 }
 
@@ -728,4 +813,18 @@ body {
         font-size: 14px;
         padding: 3px;
     }
+
+    .calendly-widget-container {
+        width: 100%;
+        max-width: 100%;
+    }
+    
+    .calendly-inline-widget {
+        height: 500px !important;
+    }
+}
+
+/* Animation for Calendly widget */
+.calendly-widget-container.show {
+    animation: fadeInCard 0.4s ease-out;
 }
