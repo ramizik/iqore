@@ -34,6 +34,68 @@ body {
     filter: drop-shadow(0 4px 16px rgba(139, 69, 255, 0.4));
 }
 
+/* Session Timer */
+.session-timer {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(25, 25, 25, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(80, 40, 150, 0.4);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 1000;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    animation: fadeInTimer 0.5s ease-out;
+}
+
+.timer-icon {
+    font-size: 16px;
+}
+
+.timer-text {
+    font-family: 'Inter', monospace;
+    font-size: 16px;
+    font-weight: 600;
+    color: #ffffff;
+    min-width: 45px;
+}
+
+.session-timer.warning {
+    border-color: rgba(255, 193, 7, 0.6);
+    background: rgba(40, 30, 0, 0.95);
+    animation: pulse 1s infinite;
+}
+
+.session-timer.warning .timer-text {
+    color: #ffc107;
+}
+
+@keyframes fadeInTimer {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 6px 20px rgba(255, 193, 7, 0.4);
+    }
+}
+
 /* Main Layout - Side by side chatbot and queue card */
 .main-layout {
     display: flex;
@@ -611,5 +673,20 @@ body {
     .demo-queue-card {
         width: 100%;
         max-width: 100%;
+    }
+    
+    .session-timer {
+        top: 15px;
+        right: 15px;
+        padding: 10px 12px;
+    }
+    
+    .timer-text {
+        font-size: 14px;
+        min-width: 40px;
+    }
+    
+    .timer-icon {
+        font-size: 14px;
     }
 }

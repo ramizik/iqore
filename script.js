@@ -9,6 +9,11 @@ let isLoading = false;
 let currentSuggestions = [];
 let hasUserSentMessage = false; // Track if user has sent their first message
 
+// Session timer variables
+let sessionTimer = null;
+let sessionTimeLeft = 600; // 10 minutes in seconds
+let oneMinuteWarningShown = false;
+
 // DOM elements
 const messagesContainer = document.getElementById('messagesContainer');
 const messageInput = document.getElementById('messageInput');
@@ -168,6 +173,9 @@ function handleSuggestionClick(suggestion) {
     // Mark that user has sent their first message
     hasUserSentMessage = true;
     
+    // Start session timer on first message
+    startSessionTimer();
+    
     sendMessage();
     
     // Hide suggestions permanently
@@ -196,6 +204,9 @@ async function sendMessage() {
     
     // Mark that user has sent their first message
     hasUserSentMessage = true;
+    
+    // Start session timer on first message
+    startSessionTimer();
     
     setLoading(true);
     
@@ -979,3 +990,93 @@ window.handleKeyDown = handleKeyDown;
 window.handleManualRefresh = handleManualRefresh;
 
 // Note: refreshQueueStatus is kept for internal monitoring but not exposed globally 
+
+// Session Timer Functions
+function startSessionTimer() {
+    // Don't start if timer is already running
+    if (sessionTimer) {
+        return;
+    }
+    
+    // Show timer element
+    const timerElement = document.getElementById('sessionTimer');
+    if (timerElement) {
+        timerElement.style.display = 'flex';
+    }
+    
+    // Update timer display immediately
+    updateTimerDisplay();
+    
+    // Start countdown
+    sessionTimer = setInterval(() => {
+        sessionTimeLeft--;
+        updateTimerDisplay();
+        
+        // Show 1-minute warning
+        if (sessionTimeLeft === 60 && !oneMinuteWarningShown) {
+            showOneMinuteWarning();
+            oneMinuteWarningShown = true;
+        }
+        
+        // End session when timer reaches 0
+        if (sessionTimeLeft <= 0) {
+            endSession();
+        }
+    }, 1000);
+    
+    console.log('Session timer started - 10 minutes');
+}
+
+function updateTimerDisplay() {
+    const timerText = document.getElementById('timerText');
+    const timerElement = document.getElementById('sessionTimer');
+    
+    if (timerText) {
+        const minutes = Math.floor(sessionTimeLeft / 60);
+        const seconds = sessionTimeLeft % 60;
+        timerText.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
+        // Add warning style when 1 minute or less
+        if (sessionTimeLeft <= 60 && timerElement) {
+            timerElement.classList.add('warning');
+        }
+    }
+}
+
+function showOneMinuteWarning() {
+    // Add warning message to chat
+    addMessage(
+        "⏰ Your session will end in 1 minute. We'd love to continue our conversation at our booth! Please visit us for more detailed discussions about iQore's quantum computing solutions.",
+        'ai'
+    );
+    
+    console.log('1-minute warning shown to user');
+}
+
+function endSession() {
+    // Clear the timer
+    if (sessionTimer) {
+        clearInterval(sessionTimer);
+        sessionTimer = null;
+    }
+    
+    // Show final message
+    addMessage(
+        "🕐 Your session has ended. Thank you for your interest in iQore! Please visit our booth for continued assistance and live demonstrations of our quantum computing technology.",
+        'ai'
+    );
+    
+    console.log('Session ended - refreshing page in 3 seconds');
+    
+    // Refresh page after 3 seconds to allow user to read the message
+    setTimeout(() => {
+        window.location.reload();
+    }, 3000);
+}
+
+// Cleanup timer on page unload
+window.addEventListener('beforeunload', function() {
+    if (sessionTimer) {
+        clearInterval(sessionTimer);
+    }
+});
