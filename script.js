@@ -7,6 +7,7 @@ const CHAT_ENDPOINT = `${API_BASE_URL}/api/v1/chat`;
 let chatHistory = [];
 let isLoading = false;
 let currentSuggestions = [];
+let hasUserSentMessage = false; // Track if user has sent their first message
 
 // DOM elements
 const messagesContainer = document.getElementById('messagesContainer');
@@ -55,6 +56,11 @@ function getRandomQuestions(count = 3) {
 
 // Initial suggestions when chat starts
 function showInitialSuggestions() {
+    // Only show suggestions if user hasn't sent a message yet
+    if (hasUserSentMessage) {
+        return;
+    }
+    
     const initialSuggestions = getRandomQuestions(3);
     updateSuggestions(initialSuggestions);
 }
@@ -121,6 +127,12 @@ function generateContextualSuggestions(userMessage) {
 
 // Update suggestion bubbles
 function updateSuggestions(suggestions) {
+    // Don't show any suggestions if user has already sent a message
+    if (hasUserSentMessage) {
+        suggestionsContainer.style.display = 'none';
+        return;
+    }
+    
     currentSuggestions = suggestions;
     
     // Clear existing suggestions
@@ -152,9 +164,13 @@ function updateSuggestions(suggestions) {
 function handleSuggestionClick(suggestion) {
     // Set the input value and send the message
     messageInput.value = suggestion;
+    
+    // Mark that user has sent their first message
+    hasUserSentMessage = true;
+    
     sendMessage();
     
-    // Hide suggestions temporarily while processing
+    // Hide suggestions permanently
     suggestionsContainer.style.display = 'none';
 }
 // Removed backend health check display as per user request
@@ -177,6 +193,10 @@ async function sendMessage() {
     
     // Clear input and disable send button
     messageInput.value = '';
+    
+    // Mark that user has sent their first message
+    hasUserSentMessage = true;
+    
     setLoading(true);
     
     // Add user message to chat
@@ -215,11 +235,8 @@ async function sendMessage() {
         // Monitor for demo-related conversation to show queue widget
         monitorChatForDemo(message, data.response);
         
-        // Generate and show new contextual suggestions based on user's message
-        const newSuggestions = generateContextualSuggestions(message);
-        setTimeout(() => {
-            updateSuggestions(newSuggestions);
-        }, 500); // Small delay to let user read the response first
+        // Don't show suggestions anymore after first message
+        suggestionsContainer.style.display = 'none';
         
         // Update chat history
         chatHistory = data.chat_history || [];
@@ -245,11 +262,8 @@ async function sendMessage() {
         
         addMessage(errorMessage, 'ai');
         
-        // Show random suggestions on error
-        setTimeout(() => {
-            const errorSuggestions = getRandomQuestions(3);
-            updateSuggestions(errorSuggestions);
-        }, 500);
+        // Don't show suggestions after first message, even on error
+        suggestionsContainer.style.display = 'none';
     } finally {
         setLoading(false);
         messageInput.focus();
