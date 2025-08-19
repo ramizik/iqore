@@ -109,15 +109,12 @@ class DemoQueueEntry(BaseModel):
     status: DemoStatus
     timestamp: datetime
     queue_position: Optional[int] = None
-    estimated_wait_time: Optional[int] = None
     notes: Optional[str] = None
 
 class QueueStatusResponse(BaseModel):
     success: bool
     total_queue_length: int
-    estimated_wait_time_minutes: int
     current_demo_in_progress: bool
-    average_demo_duration_minutes: float = 17.5
     message: Optional[str] = None
     error: Optional[str] = None
 
@@ -127,7 +124,6 @@ class UserQueueStatusResponse(BaseModel):
     name: Optional[str] = None
     status: Optional[DemoStatus] = None
     queue_position: Optional[int] = None
-    estimated_wait_time: Optional[int] = None
     total_in_queue: Optional[int] = None
     message: Optional[str] = None
     error: Optional[str] = None
@@ -184,22 +180,18 @@ class DemoQueueTool(BaseTool):
                     result = await self.chatbot_service.get_queue_status(action_data["session_id"])
                 else:
                     queue_length = await self.chatbot_service.get_current_queue_length()
-                    wait_time = await self.chatbot_service.estimate_wait_time()
                     result = {
                         "success": True,
-                        "queue_length": queue_length,
-                        "estimated_wait_time": wait_time
+                        "queue_length": queue_length
                     }
                 return json.dumps(result)
                 
             elif action == "get_overall_status":
                 queue_length = await self.chatbot_service.get_current_queue_length()
-                wait_time = await self.chatbot_service.estimate_wait_time()
                 in_progress = await self.chatbot_service.get_in_progress_count()
                 result = {
                     "success": True,
                     "total_queue_length": queue_length,
-                    "estimated_wait_time_minutes": wait_time,
                     "demos_in_progress": in_progress
                 }
                 return json.dumps(result)
@@ -894,7 +886,6 @@ class ChatbotService:
                     if queue_result.get("success"):
                         session_id = queue_result["session_id"]
                         position = queue_result["queue_position"]
-                        wait_time = queue_result["estimated_wait_time"]
                         
                         # Store session ID for future reference
                         state["demo_session_id"] = session_id
@@ -904,13 +895,12 @@ class ChatbotService:
                             f"🎉 Excellent! You're now in our demo queue.\n\n"
                             f"📊 **Your Queue Status:**\n"
                             f"• Position: #{position}\n"
-                            f"• Estimated wait: {wait_time} minutes\n"
                             f"• Demo duration: 15-20 minutes\n\n"
                             f"📍 **Next Steps:**\n"
                             f"• Find our demo station (look for the iQore quantum booth)\n"
                             f"• Our team will call your name when it's your turn\n"
                             f"• Feel free to explore other booths while you wait!\n\n"
-                            f"💬 You can ask me for queue updates anytime by saying 'queue status' or 'how long is my wait?'\n"
+                            f"💬 You can ask me for queue updates anytime by saying 'queue status'.\n"
                             f"🆔 Your session ID: `{session_id}`"
                         )
                         
@@ -975,7 +965,6 @@ class ChatbotService:
                 
                 if status_result.get("success"):
                     position = status_result["queue_position"]
-                    wait_time = status_result["estimated_wait_time"]
                     name = status_result["name"]
                     total_queue = status_result["total_in_queue"]
                     
@@ -990,7 +979,6 @@ class ChatbotService:
                         response_content = (
                             f"📊 **Queue Update for {name}:**\n"
                             f"• Current position: #{position}\n"
-                            f"• Estimated wait: {wait_time} minutes\n"
                             f"• Total people in queue: {total_queue}\n\n"
                             f"🔔 You're coming up soon! Stay nearby - we'll call your name when it's your turn."
                         )
@@ -998,10 +986,9 @@ class ChatbotService:
                         response_content = (
                             f"📊 **Queue Update for {name}:**\n"
                             f"• Current position: #{position}\n"
-                            f"• Estimated wait: {wait_time} minutes\n"
                             f"• Total people in queue: {total_queue}\n\n"
                             f"⏰ You have some time to explore other booths! "
-                            f"Come back in about {max(wait_time - 10, 5)} minutes, or ask me for another update anytime."
+                            f"Feel free to ask me for another update anytime."
                         )
                 else:
                     response_content = (
@@ -1015,12 +1002,10 @@ class ChatbotService:
                 if any(word in user_message for word in ['status', 'wait', 'long', 'queue', 'position']):
                     # General queue inquiry
                     queue_length = await self.get_current_queue_length()
-                    wait_time = await self.estimate_wait_time()
                     
                     response_content = (
                         f"📊 **Current Demo Queue Status:**\n"
-                        f"• People waiting: {queue_length}\n"
-                        f"• Estimated wait for new signups: {wait_time} minutes\n\n"
+                        f"• People waiting: {queue_length}\n\n"
                         f"Would you like to join the queue? I can sign you up right now!"
                     )
                 else:
@@ -1260,7 +1245,6 @@ class ChatbotService:
                     status=DemoStatus(entry["status"]),
                     timestamp=entry["timestamp"],
                     queue_position=position if entry["status"] == "waiting" else None,
-                    estimated_wait_time=((position - 1) * 17.5) if entry["status"] == "waiting" else None,
                     notes=entry.get("notes")
                 )
                 queue_entries.append(queue_entry)
@@ -1354,7 +1338,6 @@ class ChatbotService:
                 "interest_areas": entry.get("interest_areas", []),
                 "original_timestamp": entry.get("timestamp"),  # When they originally joined queue
                 "queue_position": entry.get("queue_position"),
-                "estimated_wait_time": entry.get("estimated_wait_time"),
                 "status": entry.get("status"),  # Their status when removed
                 "notes": entry.get("notes", ""),
                 "created_via": entry.get("created_via", "unknown"),
@@ -1578,9 +1561,6 @@ class ChatbotService:
             queue_position = queue_length + 1
             logger.info(f"Current queue length: {queue_length}, new position: {queue_position}")
             
-            # Estimate wait time (15-20 minutes per demo, assume 17.5 avg)
-            estimated_wait_time = (queue_position - 1) * 17.5 if queue_position > 1 else 0
-            
             # Create queue entry
             queue_entry = {
                 "session_id": session_id,
@@ -1592,7 +1572,6 @@ class ChatbotService:
                 "timestamp": datetime.utcnow(),
                 "status": "waiting",
                 "queue_position": queue_position,
-                "estimated_wait_time": int(estimated_wait_time),
                 "notes": "",
                 "created_via": "direct_api"  # Track how the entry was created
             }
@@ -1623,7 +1602,6 @@ class ChatbotService:
                 "success": True,
                 "session_id": session_id,
                 "queue_position": queue_position,
-                "estimated_wait_time": int(estimated_wait_time),
                 "queue_length": queue_length + 1,
                 "name": user_info.get("name"),
                 "message": f"Added to queue at position #{queue_position}"
@@ -1655,16 +1633,12 @@ class ChatbotService:
                 "timestamp": {"$lt": user_entry["timestamp"]}
             }) + 1
             
-            # Recalculate estimated wait time
-            estimated_wait_time = (current_position - 1) * 17.5 if current_position > 1 else 0
-            
             return {
                 "success": True,
                 "session_id": session_id,
                 "name": user_entry["name"],
                 "status": user_entry["status"],
                 "queue_position": current_position,
-                "estimated_wait_time": int(estimated_wait_time),
                 "total_in_queue": await self.get_current_queue_length()
             }
             
@@ -1682,15 +1656,7 @@ class ChatbotService:
             logger.error(f"Error getting queue length: {e}")
             return 0
     
-    async def estimate_wait_time(self) -> int:
-        """Estimate wait time for new queue entry in minutes"""
-        try:
-            queue_length = await self.get_current_queue_length()
-            # Average demo time is 17.5 minutes
-            return int(queue_length * 17.5)
-        except Exception as e:
-            logger.error(f"Error estimating wait time: {e}")
-            return 0
+
     
     def _validate_email(self, email: str) -> bool:
         """Validate email format"""
@@ -2051,13 +2017,11 @@ async def get_demo_queue_status() -> QueueStatusResponse:
     """Get comprehensive demo queue status"""
     try:
         queue_length = await chatbot_service.get_current_queue_length()
-        estimated_wait = await chatbot_service.estimate_wait_time()
         in_progress = await chatbot_service.get_in_progress_count()
         
         return QueueStatusResponse(
             success=True,
             total_queue_length=queue_length,
-            estimated_wait_time_minutes=estimated_wait,
             current_demo_in_progress=in_progress > 0,
             message="Queue status retrieved successfully" if queue_length > 0 else "Queue is currently empty"
         )
@@ -2066,7 +2030,6 @@ async def get_demo_queue_status() -> QueueStatusResponse:
         return QueueStatusResponse(
             success=False,
             total_queue_length=0,
-            estimated_wait_time_minutes=0,
             current_demo_in_progress=False,
             error=str(e)
         )
@@ -2084,7 +2047,6 @@ async def get_user_queue_status(session_id: str) -> UserQueueStatusResponse:
                 name=status["name"],
                 status=DemoStatus(status["status"]),
                 queue_position=status["queue_position"],
-                estimated_wait_time=status["estimated_wait_time"],
                 total_in_queue=status["total_in_queue"],
                 message=f"You are #{status['queue_position']} in queue"
             )
@@ -2117,7 +2079,6 @@ async def create_demo_request(request: DemoRequest) -> UserQueueStatusResponse:
                 name=user_info["name"],
                 status=DemoStatus.WAITING,
                 queue_position=result["queue_position"],
-                estimated_wait_time=result["estimated_wait_time"],
                 total_in_queue=result["queue_length"],
                 message=f"Successfully added to demo queue. You are #{result['queue_position']} in line."
             )
