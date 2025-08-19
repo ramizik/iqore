@@ -652,10 +652,8 @@ async function addToQueueDirectly(userInfo) {
             
             // Add success message to chat
             addSystemMessageToChat(
-                `🎉 Great! You've been added to our demo queue.\n\n` +
-                `📊 Your Position: #${result.queue_position}\n` +
-                `⏱️ Estimated Wait: ${result.estimated_wait_time} minutes\n` +
-                `🆔 Session ID: ${result.session_id}`
+                `🎉 Great! You've been added to our demo queue.\n` +
+                `📊 Your Position: #${result.queue_position}\n`
             );
             
         } else {
