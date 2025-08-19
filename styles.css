@@ -60,55 +60,6 @@ body {
     flex-shrink: 0;
 }
 
-/* Header */
-.chat-header {
-    background: linear-gradient(135deg, #2d1b69 0%, #1a0b2e 100%);
-    padding: 24px 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-bottom: 1px solid rgba(139, 69, 255, 0.2);
-    position: relative;
-    overflow: hidden;
-}
-
-.chat-header::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(45deg, rgba(139, 69, 255, 0.1) 0%, transparent 50%);
-    pointer-events: none;
-}
-
-.header-content {
-    position: relative;
-    z-index: 2;
-    text-align: center;
-    max-width: 600px;
-}
-
-.header-title {
-    font-size: 24px;
-    font-weight: 600;
-    color: #ffffff;
-    margin: 0 0 8px 0;
-    background: linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.header-subtitle {
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.8);
-    margin: 0;
-    line-height: 1.4;
-    font-weight: 400;
-}
-
 /* Main Chat Area */
 .chat-main {
     flex: 1;
@@ -383,14 +334,6 @@ body {
     
     .chat-header {
         padding: 16px 20px;
-    }
-    
-    .header-title {
-        font-size: 20px;
-    }
-    
-    .header-subtitle {
-        font-size: 13px;
     }
     
     .messages-container {
