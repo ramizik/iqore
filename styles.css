@@ -197,6 +197,7 @@ body {
     gap: 8px;
     margin-bottom: 8px;
     justify-content: center;
+    max-width: 100%;
 }
 
 .suggestion-bubble {

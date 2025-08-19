@@ -49,7 +49,7 @@ const ALL_IQORE_QUESTIONS = [
 ];
 
 // Function to get 3 random questions from the list
-function getRandomQuestions(count = 3) {
+function getRandomQuestions(count = 5) {
     const shuffled = [...ALL_IQORE_QUESTIONS].sort(() => 0.5 - Math.random());
     return shuffled.slice(0, count);
 }
@@ -61,7 +61,7 @@ function showInitialSuggestions() {
         return;
     }
     
-    const initialSuggestions = getRandomQuestions(3);
+    const initialSuggestions = getRandomQuestions(5);
     updateSuggestions(initialSuggestions);
 }
 
