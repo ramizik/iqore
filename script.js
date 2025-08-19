@@ -1078,3 +1078,46 @@ window.addEventListener('beforeunload', function() {
         clearInterval(sessionTimer);
     }
 });
+
+// Function to restart the session
+function restartSession() {
+    // Clear existing timer
+    if (sessionTimer) {
+        clearInterval(sessionTimer);
+        sessionTimer = null;
+    }
+    
+    // Reset timer variables
+    sessionTimeLeft = 600; // 10 minutes
+    oneMinuteWarningShown = false;
+    
+    // Reset user message flag
+    hasUserSentMessage = false;
+    
+    // Hide timer
+    const timerElement = document.getElementById('sessionTimer');
+    if (timerElement) {
+        timerElement.style.display = 'none';
+        timerElement.classList.remove('warning');
+    }
+    
+    // Clear chat history
+    chatHistory = [];
+    
+    // Clear messages container
+    const messagesContainer = document.getElementById('messagesContainer');
+    if (messagesContainer) {
+        messagesContainer.innerHTML = '';
+    }
+    
+    // Show initial suggestions again
+    showInitialSuggestions();
+    
+    // Fetch welcome message again
+    fetchWelcomeMessage();
+    
+    // Focus on input
+    messageInput.focus();
+    
+    console.log('Session restarted by user');
+}

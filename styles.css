@@ -74,6 +74,40 @@ body {
     color: #ffc107;
 }
 
+.timer-refresh-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 4px;
+}
+
+.timer-refresh-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 1);
+    transform: scale(1.1);
+}
+
+.timer-refresh-btn:active {
+    transform: scale(0.95);
+}
+
+.session-timer.warning .timer-refresh-btn {
+    color: rgba(255, 193, 7, 0.8);
+}
+
+.session-timer.warning .timer-refresh-btn:hover {
+    color: #ffc107;
+    background: rgba(255, 193, 7, 0.1);
+}
+
 @keyframes fadeInTimer {
     from {
         opacity: 0;
@@ -688,5 +722,10 @@ body {
     
     .timer-icon {
         font-size: 14px;
+    }
+    
+    .timer-refresh-btn {
+        font-size: 14px;
+        padding: 3px;
     }
 }
