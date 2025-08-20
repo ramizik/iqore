@@ -5,6 +5,16 @@
     box-sizing: border-box;
 }
 
+/* Hide scrollbars globally while maintaining scroll functionality */
+* {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* Internet Explorer 10+ */
+}
+
+*::-webkit-scrollbar {
+    display: none; /* WebKit browsers (Chrome, Safari, Edge) */
+}
+
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: #000000;
@@ -491,26 +501,6 @@ body {
     gap: 16px;
     height: calc(100vh - 140px);
     overflow-y: auto;
-    padding-right: 8px; /* Space for scrollbar */
-}
-
-/* Custom scrollbar for widget column */
-.widget-column::-webkit-scrollbar {
-    width: 6px;
-}
-
-.widget-column::-webkit-scrollbar-track {
-    background: rgba(40, 40, 40, 0.3);
-    border-radius: 3px;
-}
-
-.widget-column::-webkit-scrollbar-thumb {
-    background: rgba(80, 40, 150, 0.4);
-    border-radius: 3px;
-}
-
-.widget-column::-webkit-scrollbar-thumb:hover {
-    background: rgba(80, 40, 150, 0.6);
 }
 
 /* Demo Queue Card - Compact card positioned to the right of chatbot */
