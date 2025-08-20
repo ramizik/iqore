@@ -594,7 +594,10 @@ class ChatbotService:
                 welcome_message = (
                     "Welcome to iQore! I'm your quantum computing specialist, and I'm here to show you how our breakthrough technology can transform your quantum applications.\n\n"
                     "As an experienced quantum solutions advisor, I can discuss our competitive advantages in quantum-classical hybrid computing, including our patent-pending iQD optimization technology that delivers measurable performance improvements over baseline quantum circuits.\n\n"
-                    "I'm ready to cover our technology stack, industry applications, ROI benefits, and how we outperform competitors. Most importantly, I can arrange live demonstrations where you'll see real-time quantum performance comparisons on both simulators and actual quantum hardware.\n\n"
+                    "I'm ready to cover our technology stack, industry applications, ROI benefits, and how we outperform competitors. Most importantly, I can arrange our quantum computing demonstration where you'll see real-time performance comparisons on both simulators and actual quantum hardware.\n\n"
+                    "🎯 **Demo Options Available:**\n"
+                    "• **Live Demo Queue**: Join now (subject to availability) for immediate hands-on experience\n"
+                    "• **Schedule Demo**: Book the same demonstration for a time that works best for you\n\n"
                     "What specific quantum computing challenges can I help you solve today?"
                 )
                 
@@ -689,7 +692,7 @@ class ChatbotService:
         except Exception as e:
             logger.error(f"Error in demo agent: {e}")
             error_message = AIMessage(
-                content="I'd love to help you with our quantum computing demonstrations! We offer live demo queue sessions (subject to availability) and personal demo scheduling. How can I assist you?",
+                content="I'd love to help you with our quantum computing demonstration! We offer the same hands-on experience either through our live demo queue (subject to availability) or by scheduling for a convenient time. How can I assist you?",
                 name="demo_agent"
             )
             state["messages"].append(error_message)
@@ -713,15 +716,15 @@ class ChatbotService:
                      "You are an experienced iQore sales specialist focused on showcasing our quantum computing solutions through live demonstrations. Your goal is to professionally present our competitive advantages and drive demo participation.\n\n"
                      "Demo Value Proposition:\n"
                      "Our demonstrations prove iQore's quantum optimization superiority with measurable performance improvements. Visitors see real-time comparisons between standard quantum circuits and our iQD-optimized versions, with concrete metrics on fidelity gains, gate count reductions, and execution time improvements.\n\n"
-                     "Two Demo Options:\n"
-                     "**Live Demo Queue (Subject to Availability):** 10-15 minute hands-on experience showing quantum algorithms (QAOA, VQE, Quantum Volume, Grover's) executed on both simulators and actual quantum computers with performance comparisons.\n"
-                     "**Schedule Personal Demo:** One-on-one technical consultation tailored to their specific industry applications and challenges.\n\n"
+                     "Two Demo Scheduling Options (Same Experience):\n"
+                     "**Live Demo Queue (Subject to Availability):** Join now for immediate 10-15 minute hands-on experience showing quantum algorithms (QAOA, VQE, Quantum Volume, Grover's) executed on both simulators and actual quantum computers with performance comparisons.\n"
+                     "**Schedule Demo Session:** Book the exact same demonstration experience for a convenient time that works best for your schedule.\n\n"
                      "Communication Approach:\n"
                      "- Act as a confident sales professional highlighting our competitive advantages\n"
                      "- Keep responses concise and business-focused\n"
                      "- Emphasize measurable ROI and performance benefits\n"
                      "- Position iQore as the leading quantum optimization solution\n"
-                     "- After explaining, guide them: 'You should see our demo scheduling window pop up next to this chat window. I recommend the live demo to see our performance advantages firsthand. While you browse options, feel free to ask about our technology's business impact or competitive positioning.'\n\n"
+                     "- After explaining, guide them: 'You should see our demo scheduling window pop up next to this chat window. Both options offer the same quantum computing demonstration - choose immediate availability via live queue or schedule for your preferred time. While you browse options, feel free to ask about our technology's business impact or competitive positioning.'\n\n"
                      "For hesitant prospects: 'Our technical team will demonstrate the exact performance metrics and explain how these improvements translate to real-world applications in your industry.'"),
                     ("human", "{input}")
                 ])
@@ -764,7 +767,7 @@ class ChatbotService:
                         f"• Location: Right here next to this laptop\n"
                         f"• Duration: 10-15 minutes hands-on experience\n"
                         f"• Experience: Real-time quantum performance comparison on simulators and actual quantum computers\n\n"
-                        f"Would you like to join the live demo queue, or would you prefer to schedule a personal demo session for later?"
+                                                 f"Would you like to join the live demo queue for immediate experience, or schedule the same demo for a convenient time later?"
                     )
                     
                 else:
@@ -775,7 +778,7 @@ class ChatbotService:
                          "Act professionally as a confident sales expert who understands our competitive advantages and ROI benefits. "
                          "Our demos prove iQore's quantum optimization superiority with measurable performance improvements - visitors see real-time comparisons with concrete fidelity, gate count, and execution time metrics. "
                          "Keep responses concise and business-focused, emphasizing competitive differentiation and business value. "
-                         "Guide prospects: 'Our demo scheduling window shows both live queue and personal demo options. I recommend experiencing our performance advantages firsthand - you'll see exactly why leading organizations choose iQore over competitors.'"),
+                         "Guide prospects: 'Our demo scheduling window shows two timing options for the same quantum computing demonstration: join the live queue for immediate availability or schedule for your preferred time. Both offer identical hands-on experience with our performance advantages - you'll see exactly why leading organizations choose iQore over competitors.'"),
                         ("human", "{input}")
                     ])
                     
@@ -795,7 +798,7 @@ class ChatbotService:
         except Exception as e:
             logger.error(f"Error in demo initial stage: {e}")
             error_message = AIMessage(
-                content="I'd love to show you our quantum computing demonstrations! You can join our live demo queue (subject to availability) to see real-time quantum performance comparisons, or schedule a personal demo session for later. Which option interests you?",
+                content="I'd love to show you our quantum computing demonstration! You can join our live demo queue (subject to availability) for immediate experience, or schedule the same demo for a convenient time later. Which timing option works better for you?",
                 name="demo_agent"
             )
             state["messages"].append(error_message)
@@ -1008,8 +1011,8 @@ class ChatbotService:
                     # User might want to sign up
                     response_content = (
                         "I don't see you in our demo queue yet. "
-                        "Would you like me to sign you up for a quantum computing demonstration? "
-                        "It only takes a moment to get you added!"
+                        "Would you like me to sign you up for our quantum computing demonstration? "
+                        "You can join the live queue or schedule for a convenient time - both offer the same hands-on experience!"
                     )
                     state["demo_state"] = "initial"
             
@@ -1048,7 +1051,7 @@ class ChatbotService:
                  "- Keep responses brief and business-focused\n"
                  "- Position follow-up as valuable consultation, not just information sharing\n"
                  "- Emphasize our competitive advantages and proven ROI\n"
-                 "- Guide prospects: 'I'll connect you with our solutions team for a strategic discussion about how iQore delivers quantum optimization advantages in your industry. Meanwhile, our live demo here shows the performance improvements firsthand.'"),
+                 "- Guide prospects: 'I'll connect you with our solutions team for a strategic discussion about how iQore delivers quantum optimization advantages in your industry. Meanwhile, our quantum computing demonstration shows the performance improvements firsthand - available now via live queue or scheduled for your convenience.'"),
                 ("human", "{input}")
             ])
             
@@ -1165,7 +1168,7 @@ class ChatbotService:
                  "- Focus on competitive differentiation, ROI metrics, and implementation advantages\n"
                  "- Keep responses concise and business-focused - executives have limited time\n"
                  "- Emphasize proven results and customer success stories\n"
-                 "- Guide prospects: 'Our live demonstrations prove these competitive advantages with real performance metrics. You'll see exactly why leading organizations choose iQore over alternatives. I recommend experiencing our quantum optimization benefits firsthand.'\n"
+                 "- Guide prospects: 'Our quantum computing demonstration proves these competitive advantages with real performance metrics. You'll see exactly why leading organizations choose iQore over alternatives. Available now via live queue or scheduled for your preferred time - both offer identical hands-on experience with our optimization benefits.'\n"
                  "- For complex strategic discussions: 'Our executive team is here to discuss enterprise implementation strategies and partnership opportunities tailored to your organization's quantum computing roadmap.'"),
                 ("human", "{input}")
             ])
@@ -1267,6 +1270,7 @@ class ChatbotService:
                 "message": f"Queue status: {waiting_count} waiting, {in_progress_count} in progress"
             }
             
+        
         except Exception as e:
             logger.error(f"Error getting full queue status: {e}")
             return {
