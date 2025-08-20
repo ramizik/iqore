@@ -489,7 +489,28 @@ body {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    margin-top: 80px;
+    height: calc(100vh - 140px);
+    overflow-y: auto;
+    padding-right: 8px; /* Space for scrollbar */
+}
+
+/* Custom scrollbar for widget column */
+.widget-column::-webkit-scrollbar {
+    width: 6px;
+}
+
+.widget-column::-webkit-scrollbar-track {
+    background: rgba(40, 40, 40, 0.3);
+    border-radius: 3px;
+}
+
+.widget-column::-webkit-scrollbar-thumb {
+    background: rgba(80, 40, 150, 0.4);
+    border-radius: 3px;
+}
+
+.widget-column::-webkit-scrollbar-thumb:hover {
+    background: rgba(80, 40, 150, 0.6);
 }
 
 /* Demo Queue Card - Compact card positioned to the right of chatbot */
@@ -687,6 +708,7 @@ body {
     flex-shrink: 0;
     /* Hidden by default, shown only when demo keywords are detected */
     display: none;
+    max-height: 500px; /* Limit height to fit better in container */
 }
 
 .calendly-card-header {
@@ -763,9 +785,10 @@ body {
     }
     
     .widget-column {
-        margin-top: 0;
         width: 100%;
         max-width: 450px;
+        height: auto; /* Allow natural height on smaller screens */
+        max-height: calc(100vh - 140px); /* But limit to screen height */
     }
     
     .demo-queue-card {
@@ -799,7 +822,8 @@ body {
     
     .widget-column {
         width: 100%;
-        margin-top: 0;
+        height: auto; /* Allow natural height on mobile */
+        max-height: calc(100vh - 110px); /* Match the mobile chat container height */
     }
     
     .session-timer {
@@ -823,7 +847,7 @@ body {
     }
 
     .calendly-inline-widget {
-        height: 500px !important;
+        height: 400px !important;
     }
 }
 
