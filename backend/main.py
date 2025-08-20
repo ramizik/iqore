@@ -886,16 +886,10 @@ class ChatbotService:
                         state["demo_state"] = "queued"
                         
                         response_content = (
-                            f"🎉 Excellent! You're now in our demo queue.\n\n"
-                            f"📊 **Your Queue Status:**\n"
-                            f"• Position: #{position}\n"
-                            f"• Demo duration: 15-20 minutes\n\n"
-                            f"📍 **Next Steps:**\n"
-                            f"• Find our demo station (look for the iQore quantum booth)\n"
-                            f"• Our team will call your name when it's your turn\n"
-                            f"• Feel free to explore other booths while you wait!\n\n"
-                            f"💬 You can ask me for queue updates anytime by saying 'queue status'.\n"
-                            f"🆔 Your session ID: `{session_id}`"
+                            f"Excellent! You're now in our demo queue at position {position}. The demo will take about 15-20 minutes of hands-on experience with our quantum technology.\n\n"
+                            f"While you're waiting, I'm here to chat with you just like you would with any of our representatives. Feel free to ask me anything about what makes iQore different from our competitors, what you should expect during the demo, or any questions about our quantum optimization technology.\n\n"
+                            f"When it's your turn, our team will call your name at the iQore quantum booth. You can also ask me for queue updates anytime by just saying 'queue status' and I'll let you know where you stand.\n\n"
+                            f"What would you like to know about iQore while we wait?"
                         )
                         
                         logger.info(f"Successfully added {user_info['name']} to demo queue at position {position}")
