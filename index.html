@@ -54,7 +54,8 @@
     </div>
 
     <!-- Live Demo Queue Card - Appears to the right of chatbot when demo keywords detected -->
-    <div class="demo-queue-card" id="queueStatusWidget" style="display: none;">
+    <div class="widget-column">
+        <div class="demo-queue-card" id="queueStatusWidget" style="display: none;">
         <div class="queue-card-header">
             <h3>Live Demo Queue</h3>
             <button class="queue-close-btn" id="queueToggleBtn" onclick="toggleQueueWidget()">×</button>
@@ -76,24 +77,25 @@
                 </button>
             </div>
         </div>
-    </div>
-
-    <!-- Calendly Widget - Appears under demo queue when demo keywords detected -->
-    <div class="calendly-widget-container" id="calendlyWidget" style="display: none;">
-        <div class="calendly-card-header">
-            <h3>Schedule a Demo Later</h3>
-            <button class="calendly-close-btn" onclick="toggleCalendlyWidget()">×</button>
-        </div>
-        <div class="calendly-content">
-            <!-- Calendly inline widget begin -->
-            <div class="calendly-inline-widget" 
-                 data-url="https://calendly.com/r_hasanli/new-meeting?hide_event_type_details=1&hide_gdpr_banner=1" 
-                 style="min-width:320px;height:600px;">
+        
+        <!-- Calendly Widget - Appears under demo queue when demo keywords detected -->
+        <div class="calendly-widget-container" id="calendlyWidget" style="display: none;">
+            <div class="calendly-card-header">
+                <h3>Schedule a Demo Later</h3>
+                <button class="calendly-close-btn" onclick="toggleCalendlyWidget()">×</button>
             </div>
-            <!-- Calendly inline widget end -->
+            <div class="calendly-content">
+                <!-- Calendly inline widget begin -->
+                <div class="calendly-inline-widget" 
+                     data-url="https://calendly.com/r_hasanli/new-meeting?hide_event_type_details=1&hide_gdpr_banner=1" 
+                     style="min-width:320px;height:600px;">
+                </div>
+                <!-- Calendly inline widget end -->
+            </div>
         </div>
     </div>
 </div>
+
 
 <script type="text/javascript" src="https://assets.calendly.com/assets/external/widget.js" async></script>
 <script src="script.js"></script>
