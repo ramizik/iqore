@@ -708,7 +708,7 @@ body {
     flex-shrink: 0;
     /* Hidden by default, shown only when demo keywords are detected */
     display: none;
-    max-height: 500px; /* Limit height to fit better in container */
+    max-height: 800px; /* Limit height to fit better in container */
 }
 
 .calendly-card-header {
