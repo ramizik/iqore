@@ -204,102 +204,12 @@ class DemoQueueTool(BaseTool):
 
     def _run(self, action_input: str) -> str:
         """Synchronous fallback - not implemented for async operations"""
+        import json
         return json.dumps({"success": False, "error": "This tool requires async execution"})
 
-class UserInfoExtractionTool(BaseTool):
-    """Tool for extracting structured visitor information from natural language"""
-    name: str = "user_info_extractor"
-    description: str = (
-        "Extract structured visitor information (name, email, company) from natural language conversation. "
-        "Use this when visitors provide their details for demo signup. "
-        "Input should be the user's message text."
-    )
 
-    def _run(self, message_input: str) -> str:
-        """Extract user information from natural language message"""
-        try:
-            import json
-            # Basic extraction logic - this could be enhanced with more sophisticated NLP
-            info = {}
-            message_lower = message_input.lower().strip()
-            
-            # Extract email
-            import re
-            email_pattern = r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
-            email_match = re.search(email_pattern, message_input)
-            if email_match:
-                info['email'] = email_match.group(0).lower()
-            
-            # Extract name patterns
-            name_patterns = [
-                r"my name is ([a-zA-Z\s]+)",
-                r"i'm ([a-zA-Z\s]+)",
-                r"name's ([a-zA-Z\s]+)",
-                r"i am ([a-zA-Z\s]+)",
-                r"call me ([a-zA-Z\s]+)"
-            ]
-            
-            for pattern in name_patterns:
-                name_match = re.search(pattern, message_lower)
-                if name_match:
-                    potential_name = name_match.group(1).strip().title()
-                    if 2 <= len(potential_name) <= 50:
-                        info['name'] = potential_name
-                        break
-            
-            # If no name pattern found, check if message might be just a name
-            if not info.get('name') and 2 <= len(message_input.strip()) <= 50 and '@' not in message_input:
-                words = message_input.strip().split()
-                if 1 <= len(words) <= 4 and re.match(r'^[a-zA-Z\s]+$', message_input.strip()):
-                    info['name'] = message_input.strip().title()
-            
-            # Extract company
-            company_patterns = [
-                r"i work at ([a-zA-Z0-9\s&.-]+)",
-                r"work for ([a-zA-Z0-9\s&.-]+)",
-                r"from ([a-zA-Z0-9\s&.-]+)",
-                r"company is ([a-zA-Z0-9\s&.-]+)"
-            ]
-            
-            for pattern in company_patterns:
-                company_match = re.search(pattern, message_lower)
-                if company_match:
-                    potential_company = company_match.group(1).strip().title()
-                    if 2 <= len(potential_company) <= 100:
-                        info['company'] = potential_company
-                        break
-            
-            return json.dumps({
-                "success": True,
-                "extracted_info": info,
-                "info_complete": bool(info.get('name') and info.get('email'))
-            })
-            
-        except Exception as e:
-            return json.dumps({"success": False, "error": str(e)})
 
-# Phase 2: Pydantic Output Parsers for Structured Data
-class ExtractedVisitorInfo(BaseModel):
-    """Structured visitor information for demo signups"""
-    name: Optional[str] = None
-    email: Optional[str] = None
-    company: Optional[str] = None
-    interest_areas: List[str] = []
-    info_complete: bool = False
-    confidence_score: float = 0.0
 
-class DemoSignupIntent(BaseModel):
-    """Structured intent detection for demo signups"""
-    wants_demo: bool = False
-    has_questions: bool = False
-    asking_about_queue: bool = False
-    providing_info: bool = False
-    intent_confidence: float = 0.0
-    next_action: str = "continue_conversation"
-
-# Phase 2: Output Parsers
-visitor_info_parser = PydanticOutputParser(pydantic_object=ExtractedVisitorInfo)
-demo_intent_parser = PydanticOutputParser(pydantic_object=DemoSignupIntent)
 
 # LangGraph State for multi-agent system
 class AgentState(TypedDict):
@@ -310,8 +220,7 @@ class AgentState(TypedDict):
     lead_info: Dict  # Information about potential leads
     chat_history: List[Dict[str, str]]  # Chat history for context
     # Phase 1: Demo-specific state management
-    demo_state: str  # "initial", "collecting_info", "confirming", "queued"
-    demo_user_info: Dict  # {"name": "", "email": "", "company": "", "interest_areas": []}
+    demo_state: str  # "initial", "queued"
     demo_session_id: str  # Unique session identifier for queue tracking
 
 # Global variables for chatbot
@@ -339,7 +248,6 @@ class ChatbotService:
         self.llm = None
         # Phase 2: Initialize LangChain tools
         self.demo_queue_tool = None
-        self.user_info_tool = None
         
     async def initialize(self):
         """Initialize the chatbot service with multi-agent system"""
@@ -478,15 +386,11 @@ class ChatbotService:
             # Initialize demo queue management tool
             self.demo_queue_tool = DemoQueueTool(chatbot_service=self)
             
-            # Initialize user info extraction tool
-            self.user_info_tool = UserInfoExtractionTool()
-            
             logger.info("✅ LangChain tools initialized successfully")
             
         except Exception as e:
             logger.error(f"Error initializing LangChain tools: {e}")
             self.demo_queue_tool = None
-            self.user_info_tool = None
     
     async def _initialize_multi_agent_system(self):
         """Initialize the LangGraph multi-agent system with supervisor pattern"""
@@ -668,18 +572,12 @@ class ChatbotService:
             # Route to appropriate stage based on current state
             if demo_state == "initial":
                 return await self._demo_initial_stage(state)
-            elif demo_state == "collecting_info":
-                logger.info("Demo agent: In collecting_info state")
-                return await self._demo_collect_info_stage(state)
-            elif demo_state == "confirming":
-                logger.info("Demo agent: In confirming state")
-                return await self._demo_confirm_stage(state)
             elif demo_state == "queued":
                 logger.info("Demo agent: In queued state")
                 return await self._demo_queue_status_stage(state)
             else:
-                # Fallback to initial stage
-                logger.info(f"Demo agent: Unknown state '{demo_state}', falling back to initial")
+                # Fallback to initial stage for all other states since we're using UI for signup
+                logger.info(f"Demo agent: State '{demo_state}', handling via initial stage with UI guidance")
                 return await self._demo_initial_stage(state)
                 
         except Exception as e:
@@ -706,20 +604,22 @@ class ChatbotService:
                 # First time - show full demo description
                 demo_prompt = ChatPromptTemplate.from_messages([
                     ("system", 
-                     "You are an experienced iQore sales specialist focused on showcasing our quantum computing solutions through live demonstrations. Your goal is to professionally present our competitive advantages and drive demo participation.\n\n"
+                     "You are an experienced iQore sales specialist focused on showcasing our quantum computing solutions through live demonstrations. Your goal is to professionally present our competitive advantages and guide users to the scheduling interface.\n\n"
                      "Demo Value Proposition:\n"
                      "Our demonstrations prove iQore's quantum optimization superiority with measurable performance improvements. Visitors see real-time comparisons between standard quantum circuits and our iQD-optimized versions, with concrete metrics on fidelity gains, gate count reductions, and execution time improvements.\n\n"
                      "Two Demo Scheduling Options (Same Experience):\n"
                      "Live Demo Queue: Join now for immediate 10-15 minute hands-on experience showing quantum algorithms like QAOA, VQE, Quantum Volume, and Grover's executed on both simulators and actual quantum computers with performance comparisons.\n"
                      "Schedule Demo Session: Book the exact same demonstration experience for a convenient time that works best for your schedule.\n\n"
+                     "CRITICAL UI Guidance:\n"
+                     "Always direct users to the scheduling window that appears next to this chat. Do NOT handle scheduling through text conversation. The user must use the browser interface to select their preferred option.\n\n"
                      "Communication Approach:\n"
                      "- Act as a confident sales professional highlighting our competitive advantages\n"
                      "- Keep responses concise and business-focused\n"
                      "- Emphasize measurable ROI and performance benefits\n"
                      "- Position iQore as the leading quantum optimization solution\n"
                      "- CRITICAL: Write in natural conversational style without any markdown formatting, bullet points, bold text, or special characters. Use flowing sentences like you're speaking to someone in person.\n"
-                     "- After explaining, guide them naturally: You should see our demo scheduling window pop up next to this chat window. Both options offer the same quantum computing demonstration, so choose immediate availability via live queue or schedule for your preferred time. While you browse options, feel free to ask about our technology's business impact or competitive positioning.\n\n"
-                     "For hesitant prospects speak naturally: Our technical team will demonstrate the exact performance metrics and explain how these improvements translate to real-world applications in your industry."),
+                     "- Always end with: You should see our demo scheduling window appear next to this chat window where you can choose between joining the live queue for immediate experience or scheduling for your preferred time. If you're on mobile, you might need to scroll down to see the scheduling options. Both offer the identical hands-on quantum computing demonstration.\n\n"
+                     "For hesitant prospects speak naturally: Our technical team will demonstrate the exact performance metrics and explain how these improvements translate to real-world applications in your industry. Use the scheduling window next to this chat to select your preferred demo timing."),
                     ("human", "{input}")
                 ])
                 
@@ -733,35 +633,30 @@ class ChatbotService:
                 logger.info(f"Demo agent: Signup intent detected: {signup_detected} for message: '{user_message}'")
                 
                 if signup_detected:
-                    # User wants to sign up - move to info collection
+                    # User wants to sign up - direct them to the UI instead of text-based signup
                     current_queue_length = await self.get_current_queue_length()
                     wait_time = await self.estimate_wait_time()
                     
                     response_content = (
-                        f"Great! I'll add you to our demo queue.\n\n"
-                        f"Current status: {current_queue_length} people ahead, approximately {wait_time} minutes wait.\n"
-                        f"Location: Right here next to this laptop\n"
-                        f"Duration: 10 minutes hands-on experience\n\n"
-                        f"I'll need your name and email to reserve your spot. What's your name?"
+                        f"Excellent! I can see you're ready to experience our quantum computing demonstration.\n\n"
+                        f"Please use the demo scheduling window that should appear next to this chat where you can choose your preferred option. If you're on mobile, you might need to scroll down to see the scheduling interface.\n\n"
+                        f"Current live queue status: {current_queue_length} people waiting, approximately {wait_time} minutes wait time for immediate experience. The scheduled option offers the identical demonstration at your convenience.\n\n"
+                        f"Both options provide the same 10-15 minute hands-on experience with our quantum optimization technology, showing real performance comparisons on simulators and actual quantum hardware."
                     )
-                    state["demo_state"] = "collecting_info"
+                    # Don't change state - keep in initial for continued conversation
                     
-                    # Log the transition for debugging
-                    logger.info(f"Demo agent: User confirmed signup, moving to collecting_info state")
+                    # Log the interaction
+                    logger.info(f"Demo agent: User wants signup, directing to UI interface")
                     
                 elif self._detect_queue_status_intent(user_message):
-                    # User asking about queue - provide general info
+                    # User asking about queue - provide general info and direct to UI
                     current_queue_length = await self.get_current_queue_length()
                     wait_time = await self.estimate_wait_time()
                     
                     response_content = (
-                        f"Current live demo queue status:\n"
-                        f"• {current_queue_length} people waiting\n"
-                        f"• Estimated wait: {wait_time} minutes\n"
-                        f"• Location: Right here next to this laptop\n"
-                        f"• Duration: 10-15 minutes hands-on experience\n"
-                        f"• Experience: Real-time quantum performance comparison on simulators and actual quantum computers\n\n"
-                                                 f"Would you like to join the live demo queue for immediate experience, or schedule the same demo for a convenient time later?"
+                        f"Here's the current live demo queue status: {current_queue_length} people waiting with approximately {wait_time} minutes estimated wait time for immediate hands-on experience.\n\n"
+                        f"You can use the demo scheduling window next to this chat to choose between joining the live queue or scheduling for your preferred time. If you're on mobile, scroll down to see the scheduling options.\n\n"
+                        f"Both options offer the identical 10-15 minute demonstration featuring real-time quantum performance comparisons on simulators and actual quantum computers, showing exactly why iQore delivers superior optimization results."
                     )
                     
                 else:
@@ -773,7 +668,8 @@ class ChatbotService:
                          "Our demos prove iQore's quantum optimization superiority with measurable performance improvements - visitors see real-time comparisons with concrete fidelity, gate count, and execution time metrics. "
                          "Keep responses concise and business-focused, emphasizing competitive differentiation and business value. "
                          "CRITICAL: Write in natural conversational style without any markdown formatting, bullet points, bold text, or special characters. Speak like you're having a professional conversation in person. "
-                         "Guide prospects naturally: Our demo scheduling window shows two timing options for the same quantum computing demonstration: join the live queue for immediate availability or schedule for your preferred time. Both offer identical hands-on experience with our performance advantages and you'll see exactly why leading organizations choose iQore over competitors."),
+                         "CRITICAL UI Guidance: Always direct users to use the demo scheduling window that appears next to this chat for selecting their demo timing. Do NOT handle scheduling through text conversation. "
+                         "Always end responses with: You can use the demo scheduling window next to this chat to select between immediate live queue or scheduled demo timing. If you're on mobile, you might need to scroll down to see the scheduling options. Both provide the identical hands-on quantum computing experience."),
                         ("human", "{input}")
                     ])
                     
@@ -800,146 +696,9 @@ class ChatbotService:
             state["next"] = "demo_agent"
             return state
     
-    async def _demo_collect_info_stage(self, state: AgentState) -> AgentState:
-        """Phase 3: Natural conversation for collecting user information"""
-        try:
-            latest_message = state["messages"][-1]
-            current_info = state.get("demo_user_info", {})
-            
-            # Extract information from user's message
-            extracted_info, info_complete = self._extract_user_info(latest_message.content, current_info)
-            
-            # Check for phone skip patterns
-            phone_skip_patterns = ['skip', 'no phone', 'no thanks', 'not now', 'pass', 'none', 'no']
-            user_message_lower = latest_message.content.lower().strip()
-            
-            # If user is skipping phone and we have name+email, mark as complete
-            if (extracted_info.get('name') and extracted_info.get('email') and 
-                not extracted_info.get('phone') and 
-                any(skip_pattern in user_message_lower for skip_pattern in phone_skip_patterns)):
-                info_complete = True  # Mark as complete even without phone
-                logger.info("Demo agent: User skipped phone number, proceeding with name and email only")
-            
-            # Update demo_user_info with extracted information
-            state["demo_user_info"] = extracted_info
-            
-            # Log what information was extracted for debugging
-            logger.info(f"Extracted info: {extracted_info}, Complete: {info_complete}")
-            
-            # Generate natural response based on what information we have
-            if info_complete:
-                # We have name and email, move to confirmation
-                response_content = (
-                    f"Perfect! Let me confirm your details:\n"
-                    f"📝 Name: {extracted_info['name']}\n"
-                    f"📧 Email: {extracted_info['email']}\n"
-                    f"🏢 Company: {extracted_info.get('company', 'Not specified')}\n"
-                    f"📱 Phone: {extracted_info.get('phone', 'Not provided')}\n\n"
-                    f"I'll add you to our demo queue right away. Does this look correct?"
-                )
-                state["demo_state"] = "confirming"
-                state["next"] = "demo_agent"
-            else:
-                # Generate natural follow-up question
-                response_content = self._generate_info_request(extracted_info)
-                state["demo_state"] = "collecting_info"
-                state["next"] = "demo_agent"
-            
-            agent_message = AIMessage(content=response_content, name="demo_agent")
-            state["messages"].append(agent_message)
-            return state
-            
-        except Exception as e:
-            logger.error(f"Error in demo collect info stage: {e}")
-            agent_message = AIMessage(
-                content="I'd love to get you signed up! Could you please share your name and email address?",
-                name="demo_agent"
-            )
-            state["messages"].append(agent_message)
-            state["next"] = "demo_agent"
-            return state
+
     
-    async def _demo_confirm_stage(self, state: AgentState) -> AgentState:
-        """Phase 3: Handle confirmation and queue addition"""
-        try:
-            latest_message = state["messages"][-1]
-            user_response = latest_message.content.lower().strip()
-            
-            # Check if user confirms (yes, correct, confirm, etc.)
-            confirm_keywords = ['yes', 'correct', 'confirm', 'right', 'good', 'ok', 'okay', 'sure', 'yep', 'yeah']
-            deny_keywords = ['no', 'wrong', 'incorrect', 'change', 'fix', 'edit']
-            
-            if any(keyword in user_response for keyword in confirm_keywords):
-                # User confirmed - add to queue
-                user_info = state.get("demo_user_info", {})
-                
-                if user_info.get("name") and user_info.get("email"):
-                    # Add to demo queue
-                    queue_result = await self.add_to_demo_queue(user_info)
-                    
-                    if queue_result.get("success"):
-                        session_id = queue_result["session_id"]
-                        position = queue_result["queue_position"]
-                        
-                        # Store session ID for future reference
-                        state["demo_session_id"] = session_id
-                        state["demo_state"] = "queued"
-                        
-                        response_content = (
-                            f"Excellent! You're now in our demo queue at position {position}. The demo will take about 15-20 minutes of hands-on experience with our quantum technology.\n\n"
-                            f"While you're waiting, I'm here to chat with you just like you would with any of our representatives. Feel free to ask me anything about what makes iQore different from our competitors, what you should expect during the demo, or any questions about our quantum optimization technology.\n\n"
-                            f"When it's your turn, our team will call your name at the iQore quantum booth. You can also ask me for queue updates anytime by just saying 'queue status' and I'll let you know where you stand.\n\n"
-                            f"What would you like to know about iQore while we wait?"
-                        )
-                        
-                        logger.info(f"Successfully added {user_info['name']} to demo queue at position {position}")
-                        
-                    else:
-                        response_content = (
-                            "I apologize, but there was an issue adding you to the queue. "
-                            "Please find one of our team members at the booth, and they'll help you sign up directly!"
-                        )
-                        state["demo_state"] = "initial"
-                        
-                else:
-                    response_content = "I seem to be missing some information. Let me collect your details again."
-                    state["demo_state"] = "collecting_info"
-                    
-            elif any(keyword in user_response for keyword in deny_keywords):
-                # User wants to make changes
-                response_content = (
-                    "No problem! Let's update your information. "
-                    "Please share your correct name and email address, and I'll update your details."
-                )
-                state["demo_state"] = "collecting_info"
-                # Clear current info to restart collection
-                state["demo_user_info"] = {}
-                
-            else:
-                # Unclear response - ask for clarification
-                response_content = (
-                    "I want to make sure I have this right. "
-                    "Should I add you to the demo queue with these details? "
-                    "Please respond with 'yes' to confirm or 'no' to make changes."
-                )
-                # Stay in confirming state
-                state["demo_state"] = "confirming"
-            
-            agent_message = AIMessage(content=response_content, name="demo_agent")
-            state["messages"].append(agent_message)
-            state["next"] = "demo_agent" if state["demo_state"] != "queued" else "END"
-            
-            return state
-            
-        except Exception as e:
-            logger.error(f"Error in demo confirm stage: {e}")
-            agent_message = AIMessage(
-                content="There was an issue processing your signup. Please visit our booth directly for assistance!",
-                name="demo_agent"
-            )
-            state["messages"].append(agent_message)
-            state["next"] = "END"
-            return state
+
     
     async def _demo_queue_status_stage(self, state: AgentState) -> AgentState:
         """Phase 3: Handle queue status requests and updates"""
@@ -988,20 +747,19 @@ class ChatbotService:
                 user_message = latest_message.content.lower()
                 
                 if any(word in user_message for word in ['status', 'wait', 'long', 'queue', 'position']):
-                    # General queue inquiry
+                    # General queue inquiry - direct to UI
                     queue_length = await self.get_current_queue_length()
+                    wait_time = await self.estimate_wait_time()
                     
                     response_content = (
-                        f"📊 **Current Demo Queue Status:**\n"
-                        f"• People waiting: {queue_length}\n\n"
-                        f"Would you like to join the queue? I can sign you up right now!"
+                        f"Current demo queue status: {queue_length} people waiting with approximately {wait_time} minutes estimated wait time.\n\n"
+                        f"You can join using the demo scheduling window next to this chat where you can choose between the live queue for immediate experience or scheduling for your preferred time. If you're on mobile, you might need to scroll down to see the scheduling options."
                     )
                 else:
-                    # User might want to sign up
+                    # User might want to sign up - direct to UI
                     response_content = (
-                        "I don't see you in our demo queue yet. "
-                        "Would you like me to sign you up for our quantum computing demonstration? "
-                        "You can join the live queue or schedule for a convenient time - both offer the same hands-on experience!"
+                        "I don't see you in our demo queue yet. You can sign up using the demo scheduling window that appears next to this chat. "
+                        "Choose between joining the live queue for immediate experience or scheduling for a convenient time. Both offer the identical hands-on quantum computing demonstration!"
                     )
                     state["demo_state"] = "initial"
             
@@ -1037,7 +795,7 @@ class ChatbotService:
                  "- Position follow-up as valuable consultation, not just information sharing\n"
                  "- Emphasize our competitive advantages and proven ROI\n"
                  "- CRITICAL: Write in natural conversational style without any markdown formatting, bullet points, bold text, or special characters. Speak like you're having a professional business conversation.\n"
-                 "- Guide prospects naturally: I'll connect you with our solutions team for a strategic discussion about how iQore delivers quantum optimization advantages in your industry. Meanwhile, our quantum computing demonstration shows the performance improvements firsthand and is available now via live queue or scheduled for your convenience."),
+                 "- Guide prospects naturally: I'll connect you with our solutions team for a strategic discussion about how iQore delivers quantum optimization advantages in your industry. Meanwhile, our quantum computing demonstration shows the performance improvements firsthand - you can access the demo scheduling window next to this chat to choose immediate queue or scheduled timing."),
                 ("human", "{input}")
             ])
             
@@ -1101,7 +859,7 @@ class ChatbotService:
                      "Accuracy Requirements:\n"
                      "For general quantum computing use your knowledge but keep brief and relevant. For iQore-specific questions only use verified information about our technology. When uncertain about iQore details suggest connecting with our technical team rather than speculating. Never mention backend systems or data sources.\n\n"
                      "CRITICAL: Write in natural conversational style without any markdown formatting, bullet points, bold text, numbered lists, or special characters. Speak like you're having a professional conversation in person.\n\n"
-                     "Guide conversations toward our solutions, competitive advantages, and demo opportunities. Position iQore as the optimal choice for quantum optimization challenges."),
+                     "Guide conversations toward our solutions, competitive advantages, and demo opportunities. Position iQore as the optimal choice for quantum optimization challenges. When appropriate, mention that visitors can see our demonstration using the scheduling window next to this chat for immediate or scheduled timing."),
                     ("human", "{input}")
                 ])
                 
@@ -1142,7 +900,7 @@ class ChatbotService:
                  "Communication Approach:\n"
                  "Act as a confident senior sales executive with deep industry expertise. Focus on competitive differentiation, ROI metrics, and implementation advantages. Keep responses concise and business-focused since executives have limited time. Emphasize proven results and customer success stories.\n\n"
                  "CRITICAL: Write in natural conversational style without any markdown formatting, bullet points, bold text, numbered lists, or special characters. Speak like you're having a strategic business conversation with an executive.\n\n"
-                 "Guide prospects naturally: Our quantum computing demonstration proves these competitive advantages with real performance metrics. You'll see exactly why leading organizations choose iQore over alternatives. Available now via live queue or scheduled for your preferred time and both offer identical hands-on experience with our optimization benefits.\n\n"
+                 "Guide prospects naturally: Our quantum computing demonstration proves these competitive advantages with real performance metrics. You'll see exactly why leading organizations choose iQore over alternatives. Use the demo scheduling window next to this chat to select immediate queue or scheduled timing - both offer identical hands-on experience with our optimization benefits.\n\n"
                  "For complex strategic discussions speak naturally: Our executive team is here to discuss enterprise implementation strategies and partnership opportunities tailored to your organization's quantum computing roadmap."),
                 ("human", "{input}")
             ])
@@ -1429,7 +1187,6 @@ class ChatbotService:
                 chat_history=chat_history,
                 # Phase 1: Initialize demo state fields
                 demo_state="initial",
-                demo_user_info={},
                 demo_session_id=""
             )
             
@@ -1671,147 +1428,9 @@ class ChatbotService:
         """Generate unique session ID for queue tracking"""
         return str(uuid.uuid4())
     
-    # Phase 3: Natural Language Processing for Demo Signups
-    def _extract_user_info(self, message: str, current_info: Dict) -> tuple[Dict, bool]:
-        """Extract user information from natural language message"""
-        try:
-            message_lower = message.lower().strip()
-            
-            # Initialize with current info
-            info = current_info.copy()
-            
-            # Extract name (look for patterns like "my name is", "I'm", "name's")
-            name_patterns = [
-                r"my name is ([a-zA-Z\s]+)",
-                r"i'm ([a-zA-Z\s]+)",
-                r"name's ([a-zA-Z\s]+)",
-                r"i am ([a-zA-Z\s]+)",
-                r"call me ([a-zA-Z\s]+)",
-                r"this is ([a-zA-Z\s]+)"
-            ]
-            
-            for pattern in name_patterns:
-                name_match = re.search(pattern, message_lower)
-                if name_match:
-                    potential_name = name_match.group(1).strip().title()
-                    # Validate name (should be 2-50 chars, only letters and spaces)
-                    if 2 <= len(potential_name) <= 50 and re.match(r'^[a-zA-Z\s]+$', potential_name):
-                        info['name'] = potential_name
-                        break
-            
-            # If no name pattern found, check if message might be just a name
-            if not info.get('name') and not current_info.get('name'):
-                # Check if message is likely just a name (no @ symbol, reasonable length)
-                if 2 <= len(message.strip()) <= 50 and '@' not in message and re.match(r'^[a-zA-Z\s]+$', message.strip()):
-                    # Could be a name response
-                    words = message.strip().split()
-                    if 1 <= len(words) <= 4:  # Reasonable name length
-                        info['name'] = message.strip().title()
-            
-            # Extract email
-            email_pattern = r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
-            email_match = re.search(email_pattern, message)
-            if email_match:
-                potential_email = email_match.group(0).lower()
-                if self._validate_email(potential_email):
-                    info['email'] = potential_email
-            
-            # Extract phone number (look for various phone patterns)
-            phone_patterns = [
-                r"my phone is ([+]?[\d\s\-\(\)]{10,})",
-                r"phone number is ([+]?[\d\s\-\(\)]{10,})",
-                r"call me at ([+]?[\d\s\-\(\)]{10,})",
-                r"number is ([+]?[\d\s\-\(\)]{10,})",
-                # Also match standalone phone numbers
-                r"\b([+]?[\d\s\-\(\)]{10,})\b"
-            ]
-            
-            for pattern in phone_patterns:
-                phone_match = re.search(pattern, message)
-                if phone_match:
-                    potential_phone = phone_match.group(1).strip()
-                    # Basic validation - should have at least 10 digits
-                    digits_only = ''.join(filter(str.isdigit, potential_phone))
-                    if len(digits_only) >= 10:
-                        info['phone'] = potential_phone
-                        break
-            
-            # If no pattern found but message looks like a phone number
-            if not info.get('phone') and not current_info.get('phone'):
-                digits_only = ''.join(filter(str.isdigit, message.strip()))
-                if len(digits_only) >= 10 and len(message.strip()) <= 20:
-                    # Likely a phone number response
-                    info['phone'] = message.strip()
-            
-            # Extract company (look for patterns like "I work at", "from", "company is")
-            company_patterns = [
-                r"i work at ([a-zA-Z0-9\s&.-]+)",
-                r"work for ([a-zA-Z0-9\s&.-]+)",
-                r"from ([a-zA-Z0-9\s&.-]+)",
-                r"company is ([a-zA-Z0-9\s&.-]+)",
-                r"at ([a-zA-Z0-9\s&.-]+)",
-                r"with ([a-zA-Z0-9\s&.-]+)"
-            ]
-            
-            for pattern in company_patterns:
-                company_match = re.search(pattern, message_lower)
-                if company_match:
-                    potential_company = company_match.group(1).strip().title()
-                    # Validate company name
-                    if 2 <= len(potential_company) <= 100:
-                        info['company'] = potential_company
-                        break
-            
-            # Check if we have minimum required info (name and email)
-            info_complete = bool(info.get('name') and info.get('email'))
-            
-            return info, info_complete
-            
-        except Exception as e:
-            logger.error(f"Error extracting user info: {e}")
-            return current_info, False
+
     
-    def _generate_info_request(self, current_info: Dict) -> str:
-        """Generate natural follow-up question based on what info we have"""
-        try:
-            has_name = bool(current_info.get('name'))
-            has_email = bool(current_info.get('email'))
-            has_phone = bool(current_info.get('phone'))
-            
-            if not has_name and not has_email:
-                # Need both name and email
-                return (
-                    "Great! I'd love to get you signed up for our quantum computing demo. "
-                    "To reserve your spot, I'll need your name and email address. What's your name?"
-                )
-            elif has_name and not has_email:
-                # Have name, need email
-                name = current_info['name']
-                return (
-                    f"Perfect, {name}! Now I'll need your email address to complete your demo signup. "
-                    f"What email should I use for your reservation?"
-                )
-            elif not has_name and has_email:
-                # Have email, need name  
-                return (
-                    "Thanks for the email! And what's your name so I can properly add you to our demo queue?"
-                )
-            elif has_name and has_email and not has_phone:
-                # Have name and email, ask for optional phone
-                name = current_info['name']
-                return (
-                    f"Excellent, {name}! I have your name and email. "
-                    f"Would you also like to share your phone number? It's optional, but helps our assistants find you at the booth more easily."
-                )
-            else:
-                # Have all info or phone was provided/skipped
-                return (
-                    "Perfect! I have your information. Let me confirm the details with you."
-                )
-                
-        except Exception as e:
-            logger.error(f"Error generating info request: {e}")
-            return "Could you please share your name and email address for the demo signup?"
+
     
     def _detect_signup_intent(self, message: str) -> bool:
         """Detect if user wants to sign up for demo"""
