@@ -1183,6 +1183,13 @@ function showQueueWidget() {
         queueWidgetVisible = true;
         console.log('Queue widget is now visible');
         
+        // On mobile, scroll to widgets after a short delay to show them
+        if (window.innerWidth <= 768) {
+            setTimeout(() => {
+                scrollToWidgets();
+            }, 800);
+        }
+        
         // Also show Calendly widget with a small delay for smoother animation
         setTimeout(() => {
             showCalendlyWidget();
@@ -1298,17 +1305,26 @@ function initializeVirtualKeyboardHandling() {
         // If keyboard is likely open (height reduced significantly)
         if (heightDifference > 150) {
             document.body.classList.add('keyboard-open');
-            // Adjust chat container height
-            const chatContainer = document.querySelector('.chat-container');
-            if (chatContainer) {
-                chatContainer.style.height = `calc(${currentHeight}px - 140px)`;
+            
+            // On mobile, adjust the chat container to work with scrollable layout
+            if (window.innerWidth <= 768) {
+                const chatContainer = document.querySelector('.chat-container');
+                if (chatContainer) {
+                    // Reduce chat height when keyboard is open to maintain usability
+                    chatContainer.style.height = `${Math.min(currentHeight * 0.4, 300)}px`;
+                    chatContainer.style.maxHeight = `${Math.min(currentHeight * 0.4, 300)}px`;
+                }
             }
         } else {
             document.body.classList.remove('keyboard-open');
-            // Reset height
-            const chatContainer = document.querySelector('.chat-container');
-            if (chatContainer) {
-                chatContainer.style.height = 'calc(100vh - 140px)';
+            
+            // Reset heights on mobile
+            if (window.innerWidth <= 768) {
+                const chatContainer = document.querySelector('.chat-container');
+                if (chatContainer) {
+                    chatContainer.style.height = '';
+                    chatContainer.style.maxHeight = '';
+                }
             }
         }
     }
@@ -1379,4 +1395,18 @@ function throttle(func, delay) {
             }, delay - (currentTime - lastExecTime));
         }
     };
+}
+
+// Scroll to widgets on mobile to help users find them
+function scrollToWidgets() {
+    if (window.innerWidth <= 768) {
+        const widgetColumn = document.querySelector('.widget-column');
+        if (widgetColumn) {
+            widgetColumn.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start',
+                inline: 'nearest'
+            });
+        }
+    }
 }

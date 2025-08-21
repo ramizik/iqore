@@ -19,8 +19,11 @@ body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: #000000;
     color: #ffffff;
-    height: 100vh;
-    overflow: hidden;
+    min-height: 100vh;
+    overflow-x: hidden; /* Only hide horizontal overflow */
+    /* Allow vertical scrolling on mobile */
+    scroll-behavior: smooth; /* Smooth scrolling for better UX */
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
 
 /* Top Logo Section */
@@ -840,9 +843,14 @@ body {
 
 /* Responsive adjustments for Calendly widget */
 @media (max-width: 1200px) {
+    body {
+        overflow-y: auto; /* Enable vertical scrolling on smaller screens */
+    }
+    
     .main-layout {
         flex-direction: column;
         align-items: center;
+        min-height: auto; /* Allow natural height for scrolling */
     }
     
     .top-logo-section {
@@ -854,7 +862,8 @@ body {
         width: 100%;
         max-width: 450px;
         height: auto; /* Allow natural height on smaller screens */
-        max-height: calc(100vh - 140px); /* But limit to screen height */
+        max-height: none; /* Remove height restriction for scrolling */
+        overflow-y: visible; /* Allow content to be visible */
     }
     
     .demo-queue-card {
@@ -864,6 +873,8 @@ body {
     .chat-container {
         width: 100%;
         max-width: 800px;
+        height: 60vh; /* Fixed height that allows for scrolling to widgets */
+        min-height: 400px; /* Minimum usable height */
     }
 
     .calendly-widget-container {
@@ -877,19 +888,22 @@ body {
 
 @media (max-width: 768px) {
     .main-layout {
-        padding: 90px 10px 10px;
+        padding: 90px 10px 20px; /* Add bottom padding for scrolling */
         gap: 15px;
         min-height: calc(100vh - 110px);
     }
     
     .chat-container {
-        height: calc(100vh - 110px);
+        height: 50vh; /* Reduce height to allow scrolling to widgets */
+        min-height: 350px; /* Minimum usable height */
+        max-height: 70vh; /* Maximum height to ensure widgets are reachable */
     }
     
     .widget-column {
         width: 100%;
         height: auto; /* Allow natural height on mobile */
-        max-height: calc(100vh - 110px); /* Match the mobile chat container height */
+        max-height: none; /* Remove height restrictions for scrolling */
+        margin-top: 20px; /* Add space between chat and widgets */
     }
     
     .session-timer {
@@ -924,11 +938,24 @@ body {
 
 /* Virtual Keyboard Handling */
 body.keyboard-open .chat-container {
-    transition: height 0.3s ease;
+    transition: height 0.3s ease, max-height 0.3s ease;
 }
 
 body.keyboard-open .main-layout {
     padding-bottom: 10px;
+}
+
+/* Ensure smooth scrolling when keyboard appears */
+@media (max-width: 768px) {
+    body.keyboard-open {
+        /* Maintain scrollability when keyboard is open */
+        overflow-y: auto;
+    }
+    
+    body.keyboard-open .main-layout {
+        /* Ensure content remains accessible */
+        min-height: auto;
+    }
 }
 
 /* Screen reader improvements */
@@ -986,12 +1013,14 @@ body.keyboard-open .main-layout {
     }
     
     .main-layout {
-        padding: 80px 5px 5px;
+        padding: 80px 5px 20px; /* Add bottom padding for scrolling */
         gap: 10px;
     }
     
     .chat-container {
-        height: calc(100vh - 90px);
+        height: 45vh; /* Further reduce height on very small screens */
+        min-height: 300px; /* Minimum usable height */
+        max-height: 60vh; /* Ensure widgets are easily reachable */
     }
     
     .messages-container {
