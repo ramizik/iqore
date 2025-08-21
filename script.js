@@ -23,7 +23,10 @@ const suggestionsContainer = document.getElementById('suggestionsContainer');
 // Initialize the chat interface
 document.addEventListener('DOMContentLoaded', function() {
     console.log('iQore Chatbot Frontend initialized');
-    messageInput.focus();
+    // Only focus on desktop or when widgets are not visible
+    if (window.innerWidth > 768) {
+        messageInput.focus();
+    }
     showInitialSuggestions();
     // Fetch initial welcome message from backend
     fetchWelcomeMessage();
@@ -285,7 +288,10 @@ async function sendMessage() {
         suggestionsContainer.style.display = 'none';
     } finally {
         setLoading(false);
-        messageInput.focus();
+        // Only focus on input if user is not scrolling or interacting with widgets
+        if (window.innerWidth > 768 || !queueWidgetVisible) {
+            messageInput.focus();
+        }
     }
 }
 
@@ -1139,8 +1145,10 @@ function restartSession() {
     // Fetch welcome message again
     fetchWelcomeMessage();
     
-    // Focus on input
-    messageInput.focus();
+    // Focus on input only if not on mobile or widgets not visible
+    if (window.innerWidth > 768 || !queueWidgetVisible) {
+        messageInput.focus();
+    }
     
     console.log('Session restarted by user');
 }
@@ -1183,8 +1191,14 @@ function showQueueWidget() {
         queueWidgetVisible = true;
         console.log('Queue widget is now visible');
         
-        // On mobile, scroll to widgets after a short delay to show them
+        // Add widgets-visible class to chat container on mobile
         if (window.innerWidth <= 768) {
+            const chatContainer = document.querySelector('.chat-container');
+            if (chatContainer) {
+                chatContainer.classList.add('widgets-visible');
+            }
+            
+            // Scroll to widgets after a short delay to show them
             setTimeout(() => {
                 scrollToWidgets();
             }, 800);
@@ -1204,6 +1218,14 @@ function hideQueueWidget() {
         widget.style.display = 'none';
         widget.classList.remove('show');
         queueWidgetVisible = false;
+    }
+    
+    // Remove widgets-visible class from chat container on mobile
+    if (window.innerWidth <= 768) {
+        const chatContainer = document.querySelector('.chat-container');
+        if (chatContainer) {
+            chatContainer.classList.remove('widgets-visible');
+        }
     }
     
     // Also hide Calendly widget
@@ -1237,14 +1259,17 @@ function setupMobileInputHandling() {
     
     // Handle virtual keyboard appearance
     window.addEventListener('resize', throttle(function() {
-        // Scroll to input when keyboard appears
-        if (document.activeElement === messageInput) {
+        // Only scroll to input when keyboard appears if widgets are not visible
+        // This prevents interrupting user's widget interaction
+        if (document.activeElement === messageInput && !queueWidgetVisible) {
             setTimeout(() => {
                 messageInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 300);
         }
-        // Also update scroll position
-        scrollToBottom();
+        // Only auto-scroll chat to bottom if user is actively in chat area
+        if (!queueWidgetVisible) {
+            scrollToBottom();
+        }
     }, 100));
 }
 
@@ -1410,3 +1435,15 @@ function scrollToWidgets() {
         }
     }
 }
+
+// Handle window resize to manage widgets-visible class
+window.addEventListener('resize', throttle(function() {
+    const chatContainer = document.querySelector('.chat-container');
+    if (chatContainer && queueWidgetVisible) {
+        if (window.innerWidth <= 768) {
+            chatContainer.classList.add('widgets-visible');
+        } else {
+            chatContainer.classList.remove('widgets-visible');
+        }
+    }
+}, 100));

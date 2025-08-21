@@ -894,9 +894,15 @@ body {
     }
     
     .chat-container {
-        height: 50vh; /* Reduce height to allow scrolling to widgets */
+        height: calc(100vh - 110px); /* Full height when widgets are hidden */
         min-height: 350px; /* Minimum usable height */
-        max-height: 70vh; /* Maximum height to ensure widgets are reachable */
+        transition: height 0.3s ease; /* Smooth transition when widgets appear */
+    }
+    
+    /* When widgets are visible, reduce chat height */
+    .chat-container.widgets-visible {
+        height: 50vh; /* Reduce height when widgets are shown */
+        max-height: 60vh; /* Maximum height to ensure widgets are reachable */
     }
     
     .widget-column {
@@ -1018,9 +1024,15 @@ body.keyboard-open .main-layout {
     }
     
     .chat-container {
-        height: 45vh; /* Further reduce height on very small screens */
+        height: calc(100vh - 90px); /* Full height when widgets are hidden */
         min-height: 300px; /* Minimum usable height */
-        max-height: 60vh; /* Ensure widgets are easily reachable */
+        transition: height 0.3s ease; /* Smooth transition when widgets appear */
+    }
+    
+    /* When widgets are visible on very small screens */
+    .chat-container.widgets-visible {
+        height: 45vh; /* Reduce height when widgets are shown */
+        max-height: 50vh; /* Ensure widgets are easily reachable */
     }
     
     .messages-container {
