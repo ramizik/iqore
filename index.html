@@ -25,8 +25,8 @@
     <div class="main-layout">
         <div class="chat-container">
         <!-- Chat Messages Area -->
-        <main class="chat-main">
-            <div class="messages-container" id="messagesContainer">
+        <main class="chat-main" role="main" aria-label="Chat conversation">
+            <div class="messages-container" id="messagesContainer" aria-live="polite" aria-label="Chat messages">
                 <!-- Messages will be dynamically added here -->
             </div>
         </main>
@@ -42,9 +42,14 @@
                     id="messageInput" 
                     placeholder="Type your message here..."
                     onkeydown="handleKeyDown(event)"
+                    aria-label="Type your message to chat with iQore AI"
+                    autocomplete="off"
+                    autocapitalize="sentences"
+                    autocorrect="on"
                 >
-                <button class="send-button" id="sendButton" onclick="sendMessage()">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <button class="send-button" id="sendButton" onclick="sendMessage()" aria-label="Send message">
+                    <span class="sr-only">Send message</span>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>

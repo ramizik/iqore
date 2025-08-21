@@ -27,6 +27,12 @@ document.addEventListener('DOMContentLoaded', function() {
     showInitialSuggestions();
     // Fetch initial welcome message from backend
     fetchWelcomeMessage();
+    
+    // Initialize mobile enhancements
+    setupMobileInputHandling();
+    addTouchFeedback();
+    addSwipeSupport();
+    initializeVirtualKeyboardHandling();
 });
 
 // Comprehensive list of questions about iQore
@@ -154,6 +160,8 @@ function updateSuggestions(suggestions) {
         const suggestionBubble = document.createElement('button');
         suggestionBubble.className = 'suggestion-bubble';
         suggestionBubble.textContent = suggestion;
+        suggestionBubble.setAttribute('aria-label', `Ask: ${suggestion}`);
+        suggestionBubble.setAttribute('type', 'button');
         suggestionBubble.onclick = () => handleSuggestionClick(suggestion);
         
         // Add slight delay for animation
@@ -301,7 +309,12 @@ function addMessage(text, sender) {
     // Add message text
     const messageText = document.createElement('p');
     messageText.textContent = text;
+    messageText.setAttribute('aria-label', `${sender === 'ai' ? 'AI' : 'User'} message: ${text}`);
     messageBubble.appendChild(messageText);
+    
+    // Add ARIA attributes for accessibility
+    messageBubble.setAttribute('role', 'article');
+    messageBubble.setAttribute('aria-label', `${sender === 'ai' ? 'AI' : 'User'} message`);
     
     // Assemble message group
     messageGroup.appendChild(messageAvatar);
@@ -416,10 +429,10 @@ function scrollToBottom() {
     }, 100);
 }
 
-// Handle window resize
-window.addEventListener('resize', function() {
-    scrollToBottom();
-});
+// Handle window resize (will be replaced by throttled version in mobile enhancements)
+// window.addEventListener('resize', function() {
+//     scrollToBottom();
+// });
 
 // Handle connection errors gracefully
 window.addEventListener('online', function() {
@@ -1201,4 +1214,169 @@ function toggleQueueWidget() {
     if (widget) {
         hideQueueWidget();
     }
+}
+
+// Mobile Enhancement Functions
+let initialViewportHeight = window.innerHeight;
+
+function setupMobileInputHandling() {
+    // Prevent zoom on input focus (iOS Safari)
+    messageInput.addEventListener('focus', function() {
+        // Temporarily increase font size to prevent zoom
+        if (window.innerWidth <= 768) {
+            messageInput.style.fontSize = '16px';
+        }
+    });
+    
+    // Handle virtual keyboard appearance
+    window.addEventListener('resize', throttle(function() {
+        // Scroll to input when keyboard appears
+        if (document.activeElement === messageInput) {
+            setTimeout(() => {
+                messageInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 300);
+        }
+        // Also update scroll position
+        scrollToBottom();
+    }, 100));
+}
+
+function addTouchFeedback() {
+    // Add haptic feedback for touch interactions (if available)
+    function addTouchListeners(element) {
+        element.addEventListener('touchstart', function() {
+            if (navigator.vibrate) {
+                navigator.vibrate(10); // Subtle haptic feedback
+            }
+            // Add visual feedback
+            element.style.transform = 'scale(0.95)';
+        });
+        
+        element.addEventListener('touchend', function() {
+            // Reset visual feedback
+            setTimeout(() => {
+                element.style.transform = '';
+            }, 100);
+        });
+    }
+    
+    // Add to existing buttons
+    const buttons = document.querySelectorAll('button, .suggestion-bubble');
+    buttons.forEach(addTouchListeners);
+    
+    // Observer for dynamically added suggestion bubbles
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            mutation.addedNodes.forEach(function(node) {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    if (node.classList && node.classList.contains('suggestion-bubble')) {
+                        addTouchListeners(node);
+                    }
+                    // Also check child elements
+                    const newButtons = node.querySelectorAll && node.querySelectorAll('button, .suggestion-bubble');
+                    if (newButtons) {
+                        newButtons.forEach(addTouchListeners);
+                    }
+                }
+            });
+        });
+    });
+    
+    // Start observing the suggestions container for changes
+    const suggestionsContainer = document.getElementById('suggestionsContainer');
+    if (suggestionsContainer) {
+        observer.observe(suggestionsContainer, { childList: true, subtree: true });
+    }
+}
+
+function initializeVirtualKeyboardHandling() {
+    // Handle viewport height changes for virtual keyboard
+    function handleVirtualKeyboard() {
+        const currentHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        const heightDifference = initialViewportHeight - currentHeight;
+        
+        // If keyboard is likely open (height reduced significantly)
+        if (heightDifference > 150) {
+            document.body.classList.add('keyboard-open');
+            // Adjust chat container height
+            const chatContainer = document.querySelector('.chat-container');
+            if (chatContainer) {
+                chatContainer.style.height = `calc(${currentHeight}px - 140px)`;
+            }
+        } else {
+            document.body.classList.remove('keyboard-open');
+            // Reset height
+            const chatContainer = document.querySelector('.chat-container');
+            if (chatContainer) {
+                chatContainer.style.height = 'calc(100vh - 140px)';
+            }
+        }
+    }
+
+    // Listen for viewport changes (virtual keyboard)
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', handleVirtualKeyboard);
+    }
+    
+    // Fallback for older browsers
+    window.addEventListener('resize', throttle(handleVirtualKeyboard, 100));
+}
+
+function addSwipeSupport() {
+    let startX, startY, distX, distY;
+    const threshold = 100; // minimum distance for swipe
+    
+    messagesContainer.addEventListener('touchstart', function(e) {
+        const touch = e.touches[0];
+        startX = touch.clientX;
+        startY = touch.clientY;
+    });
+    
+    messagesContainer.addEventListener('touchmove', function(e) {
+        // Prevent default to avoid scrolling issues on horizontal swipes
+        const touch = e.touches[0];
+        const currentDistX = Math.abs(touch.clientX - startX);
+        const currentDistY = Math.abs(touch.clientY - startY);
+        
+        if (currentDistX > currentDistY && currentDistX > 10) {
+            e.preventDefault();
+        }
+    });
+    
+    messagesContainer.addEventListener('touchend', function(e) {
+        const touch = e.changedTouches[0];
+        distX = touch.clientX - startX;
+        distY = touch.clientY - startY;
+        
+        // Check if it's a horizontal swipe
+        if (Math.abs(distX) > Math.abs(distY) && Math.abs(distX) > threshold) {
+            if (distX > 0) {
+                // Swipe right - could show additional options
+                console.log('Swiped right - future feature');
+            } else {
+                // Swipe left - could hide widgets or show menu
+                console.log('Swiped left - future feature');
+            }
+        }
+    });
+}
+
+// Throttle function for better performance
+function throttle(func, delay) {
+    let timeoutId;
+    let lastExecTime = 0;
+    return function (...args) {
+        const currentTime = Date.now();
+        
+        if (currentTime - lastExecTime > delay) {
+            func.apply(this, args);
+            lastExecTime = currentTime;
+        } else {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                func.apply(this, args);
+                lastExecTime = Date.now();
+            }, delay - (currentTime - lastExecTime));
+        }
+    };
 }
