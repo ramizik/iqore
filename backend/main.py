@@ -642,14 +642,11 @@ class ChatbotService:
                 
                 if signup_detected:
                     # User wants to sign up - direct them to the UI instead of text-based signup
-                    current_queue_length = await self.get_current_queue_length()
-                    wait_time = await self.estimate_wait_time()
-                    
                     response_content = (
-                        f"Excellent! I can see you're ready to experience our quantum computing demonstration.\n\n"
-                        f"Please use the demo scheduling window that should appear next to this chat where you can choose your preferred option. If you're on mobile, you might need to scroll down to see the scheduling interface.\n\n"
-                        f"Current live queue status: {current_queue_length} people waiting, approximately {wait_time} minutes wait time for immediate experience. The scheduled option offers the identical demonstration at your convenience.\n\n"
-                        f"Both options provide the same 10-15 minute hands-on experience with our quantum optimization technology, showing real performance comparisons on simulators and actual quantum hardware."
+                        "Excellent! I can see you're ready to experience our quantum computing demonstration.\n\n"
+                        "Please use the demo scheduling window that should appear next to this chat where you can choose your preferred option. If you're on mobile, you might need to scroll down to see the scheduling interface.\n\n"
+                        "You'll see live queue status with current wait times in the scheduling widget. The scheduled option offers the identical demonstration at your convenience.\n\n"
+                        "Both options provide the same 10-15 minute hands-on experience with our quantum optimization technology, showing real performance comparisons on simulators and actual quantum hardware."
                     )
                     # Don't change state - keep in initial for continued conversation
                     
@@ -657,14 +654,11 @@ class ChatbotService:
                     logger.info(f"Demo agent: User wants signup, directing to UI interface")
                     
                 elif self._detect_queue_status_intent(user_message):
-                    # User asking about queue - provide general info and direct to UI
-                    current_queue_length = await self.get_current_queue_length()
-                    wait_time = await self.estimate_wait_time()
-                    
+                    # User asking about queue - direct to UI for status
                     response_content = (
-                        f"Here's the current live demo queue status: {current_queue_length} people waiting with approximately {wait_time} minutes estimated wait time for immediate hands-on experience.\n\n"
-                        f"You can use the demo scheduling window next to this chat to choose between joining the live queue or scheduling for your preferred time. If you're on mobile, scroll down to see the scheduling options.\n\n"
-                        f"Both options offer the identical 10-15 minute demonstration featuring real-time quantum performance comparisons on simulators and actual quantum computers, showing exactly why iQore delivers superior optimization results."
+                        "You can check the current live demo queue status in the scheduling window next to this chat. The widget shows real-time queue information including wait times and your position if you're already signed up.\n\n"
+                        "You can use the demo scheduling window to choose between joining the live queue or scheduling for your preferred time. If you're on mobile, scroll down to see the scheduling options.\n\n"
+                        "Both options offer the identical 10-15 minute demonstration featuring real-time quantum performance comparisons on simulators and actual quantum computers, showing exactly why iQore delivers superior optimization results."
                     )
                     
                 else:
@@ -709,67 +703,17 @@ class ChatbotService:
 
     
     async def _demo_queue_status_stage(self, state: AgentState) -> AgentState:
-        """Phase 3: Handle queue status requests and updates"""
+        """Phase 3: Handle queue status requests and redirect to UI"""
         try:
             latest_message = state["messages"][-1]
-            session_id = state.get("demo_session_id", "")
             
-            if session_id:
-                # Get current queue status
-                status_result = await self.get_queue_status(session_id)
-                
-                if status_result.get("success"):
-                    position = status_result["queue_position"]
-                    name = status_result["name"]
-                    total_queue = status_result["total_in_queue"]
-                    
-                    if position == 1:
-                        response_content = (
-                            f"🎉 Great news, {name}! You're **next in line**!\n\n"
-                            f"📍 Please head to our demo station now - our team should be calling your name any moment. "
-                            f"Look for the iQore quantum computing booth!\n\n"
-                            f"⏱️ Your demo will last about 15-20 minutes with hands-on quantum algorithm exploration."
-                        )
-                    elif position <= 3:
-                        response_content = (
-                            f"📊 **Queue Update for {name}:**\n"
-                            f"• Current position: #{position}\n"
-                            f"• Total people in queue: {total_queue}\n\n"
-                            f"🔔 You're coming up soon! Stay nearby - we'll call your name when it's your turn."
-                        )
-                    else:
-                        response_content = (
-                            f"📊 **Queue Update for {name}:**\n"
-                            f"• Current position: #{position}\n"
-                            f"• Total people in queue: {total_queue}\n\n"
-                            f"⏰ You have some time to explore other booths! "
-                            f"Feel free to ask me for another update anytime."
-                        )
-                else:
-                    response_content = (
-                        "I'm having trouble finding your queue entry. "
-                        "Please visit our booth directly, and our team will help you!"
-                    )
-            else:
-                # No session ID - user might be asking about general queue or wanting to sign up
-                user_message = latest_message.content.lower()
-                
-                if any(word in user_message for word in ['status', 'wait', 'long', 'queue', 'position']):
-                    # General queue inquiry - direct to UI
-                    queue_length = await self.get_current_queue_length()
-                    wait_time = await self.estimate_wait_time()
-                    
-                    response_content = (
-                        f"Current demo queue status: {queue_length} people waiting with approximately {wait_time} minutes estimated wait time.\n\n"
-                        f"You can join using the demo scheduling window next to this chat where you can choose between the live queue for immediate experience or scheduling for your preferred time. If you're on mobile, you might need to scroll down to see the scheduling options."
-                    )
-                else:
-                    # User might want to sign up - direct to UI
-                    response_content = (
-                        "I don't see you in our demo queue yet. You can sign up using the demo scheduling window that appears next to this chat. "
-                        "Choose between joining the live queue for immediate experience or scheduling for a convenient time. Both offer the identical hands-on quantum computing demonstration!"
-                    )
-                    state["demo_state"] = "initial"
+            # Always redirect users to the UI for queue status and management
+            response_content = (
+                "For live demo queue status and management, please use the demo scheduling window next to this chat. "
+                "The queue widget shows real-time updates including your current position, estimated wait times, and queue status. "
+                "You can also schedule a demo for a convenient time using the same interface. "
+                "If you're on mobile, scroll down to see the scheduling options."
+            )
             
             agent_message = AIMessage(content=response_content, name="demo_agent")
             state["messages"].append(agent_message)
@@ -780,7 +724,7 @@ class ChatbotService:
         except Exception as e:
             logger.error(f"Error in demo queue status stage: {e}")
             agent_message = AIMessage(
-                content="I can help you check your demo queue status! Ask me about your queue position anytime.",
+                content="Please use the demo scheduling window next to this chat for queue management and status updates.",
                 name="demo_agent"
             )
             state["messages"].append(agent_message)
