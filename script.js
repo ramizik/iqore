@@ -1067,7 +1067,7 @@ function extendTime() {
     
     // Add a brief message to indicate time was extended
     addMessage(
-        "⏰ Your session time has been extended by 10 minutes. Continue exploring iQore's quantum computing solutions!",
+        "⏰ Your session time has been extended. Continue exploring iQore's quantum computing solutions!",
         'system'
     );
     
