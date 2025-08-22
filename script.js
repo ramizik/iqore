@@ -681,7 +681,8 @@ async function addToQueueDirectly(userInfo) {
             // Add success message to chat
             addSystemMessageToChat(
                 `🎉 Great! You've been added to our demo queue.\n` +
-                `📊 Your Position: #${result.queue_position}\n`
+                `📊 Your Position: #${result.queue_position}\n\n` +
+                `💬 While you wait, feel free to ask me anything you're curious about! I can tell you what to expect from your demo experience, explain our breakthrough quantum technologies like iQD optimization, or discuss how our quantum-classical hybrid approach delivers superior performance. What would you like to explore?`
             );
             
         } else {
@@ -1015,6 +1016,7 @@ window.toggleCalendlyWidget = toggleCalendlyWidget; // Add this line
 window.requestDemo = requestDemo;
 window.handleKeyDown = handleKeyDown; 
 window.handleManualRefresh = handleManualRefresh;
+window.extendTime = extendTime;
 
 // Note: refreshQueueStatus is kept for internal monitoring but not exposed globally 
 
@@ -1151,6 +1153,36 @@ function restartSession() {
     }
     
     console.log('Session restarted by user');
+}
+
+// Function to extend session time without clearing chat
+function extendTime() {
+    // Clear existing timer
+    if (sessionTimer) {
+        clearInterval(sessionTimer);
+        sessionTimer = null;
+    }
+    
+    // Reset timer variables
+    sessionTimeLeft = 600; // 10 minutes
+    oneMinuteWarningShown = false;
+    
+    // Remove warning style if present
+    const timerElement = document.getElementById('sessionTimer');
+    if (timerElement) {
+        timerElement.classList.remove('warning');
+    }
+    
+    // Start the timer again
+    startSessionTimer();
+    
+    // Add a brief message to indicate time was extended
+    addMessage(
+        "⏰ Your session time has been extended by 10 minutes. Continue exploring iQore's quantum computing solutions!",
+        'system'
+    );
+    
+    console.log('Session time extended by user');
 }
 
 // Add Calendly widget functions

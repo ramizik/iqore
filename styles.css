@@ -87,38 +87,101 @@ body {
     color: #ffc107;
 }
 
-.timer-refresh-btn {
-    background: none;
-    border: none;
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 16px;
-    cursor: pointer;
-    padding: 4px;
-    border-radius: 4px;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-left: 4px;
-}
 
-.timer-refresh-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 1);
-    transform: scale(1.1);
-}
-
-.timer-refresh-btn:active {
-    transform: scale(0.95);
-}
-
-.session-timer.warning .timer-refresh-btn {
-    color: rgba(255, 193, 7, 0.8);
-}
 
 .session-timer.warning .timer-refresh-btn:hover {
     color: #ffc107;
     background: rgba(255, 193, 7, 0.1);
+}
+
+/* Timer buttons container */
+.timer-buttons {
+    display: flex;
+    gap: 6px;
+    margin-left: 4px;
+}
+
+/* Extend time button */
+.timer-extend-btn {
+    background: rgba(139, 69, 255, 0.1);
+    border: 1px solid rgba(139, 69, 255, 0.3);
+    color: rgba(139, 69, 255, 0.9);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Inter', sans-serif;
+    white-space: nowrap;
+}
+
+.timer-extend-btn:hover {
+    background: rgba(139, 69, 255, 0.2);
+    border-color: rgba(139, 69, 255, 0.5);
+    color: rgba(139, 69, 255, 1);
+    transform: translateY(-1px);
+}
+
+.timer-extend-btn:active {
+    transform: translateY(0);
+}
+
+/* Updated refresh button for text */
+.timer-refresh-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Inter', sans-serif;
+    white-space: nowrap;
+}
+
+.timer-refresh-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 1);
+    transform: translateY(-1px);
+}
+
+.timer-refresh-btn:active {
+    transform: translateY(0);
+}
+
+/* Warning state for both buttons */
+.session-timer.warning .timer-extend-btn {
+    background: rgba(255, 193, 7, 0.1);
+    border-color: rgba(255, 193, 7, 0.3);
+    color: rgba(255, 193, 7, 0.9);
+}
+
+.session-timer.warning .timer-extend-btn:hover {
+    background: rgba(255, 193, 7, 0.2);
+    border-color: rgba(255, 193, 7, 0.5);
+    color: #ffc107;
+}
+
+.session-timer.warning .timer-refresh-btn {
+    background: rgba(255, 193, 7, 0.05);
+    border-color: rgba(255, 193, 7, 0.2);
+    color: rgba(255, 193, 7, 0.8);
+}
+
+.session-timer.warning .timer-refresh-btn:hover {
+    background: rgba(255, 193, 7, 0.1);
+    border-color: rgba(255, 193, 7, 0.3);
+    color: #ffc107;
 }
 
 @keyframes fadeInTimer {
@@ -927,9 +990,14 @@ body {
         font-size: 14px;
     }
     
+    .timer-buttons {
+        gap: 4px;
+    }
+    
+    .timer-extend-btn,
     .timer-refresh-btn {
-        font-size: 14px;
-        padding: 3px;
+        font-size: 11px;
+        padding: 4px 6px;
     }
 
     .calendly-inline-widget {

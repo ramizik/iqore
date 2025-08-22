@@ -1905,12 +1905,22 @@ async def chat_endpoint(request: ChatRequest) -> ChatResponse:
             chat_history=result["chat_history"]
         )
         
-        # Save chat history to database
+        # Save chat history to database (skip system initialization messages)
         try:
-            await chatbot_service.save_chat_history(
-                user_message=request.message,
-                assistant_response=result["response"]
+            # Check if this is the system initialization welcome message
+            is_initialization = (
+                len(request.chat_history) == 0 and  # First interaction
+                result["response"].startswith("Welcome to iQore!")  # System welcome message
             )
+            
+            if not is_initialization:
+                await chatbot_service.save_chat_history(
+                    user_message=request.message,
+                    assistant_response=result["response"]
+                )
+            else:
+                logger.info("Skipping chat history save for system initialization message")
+                
         except Exception as save_error:
             # Log the error but don't fail the chat response
             logger.error(f"Failed to save chat history: {save_error}")
