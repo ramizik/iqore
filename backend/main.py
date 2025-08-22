@@ -244,6 +244,8 @@ class ChatbotService:
         self.demo_queue_collection = None
         # Initialize demo_done collection reference
         self.demo_done_collection = None
+        # Initialize chat history collection reference
+        self.chat_history_collection = None
         self.multi_agent_graph = None
         self.llm = None
         # Phase 2: Initialize LangChain tools
@@ -280,6 +282,8 @@ class ChatbotService:
             self.demo_queue_collection = self.db['demo_queue']
             # Initialize demo_done collection for completed/removed demos
             self.demo_done_collection = self.db['demo_done']
+            # Initialize chat history collection
+            self.chat_history_collection = self.db['chat_history']
             
             # Check if there are documents in the collection
             doc_count = self.pdf_chunks_collection.count_documents({})
@@ -295,6 +299,10 @@ class ChatbotService:
             # Check demo_done collection
             demo_done_count = self.demo_done_collection.count_documents({})
             logger.info(f"Demo done collection initialized with {demo_done_count} completed entries")
+            
+            # Check chat history collection
+            chat_history_count = self.chat_history_collection.count_documents({})
+            logger.info(f"Chat history collection initialized with {chat_history_count} existing entries")
             
             # Initialize the traditional RAG chain for technical agent
             await self._initialize_rag_chain()
@@ -1148,6 +1156,72 @@ class ChatbotService:
             logger.error(f"Error getting demo done stats: {e}")
             return {"success": False, "error": str(e)}
 
+    async def save_chat_history(self, user_message: str, assistant_response: str, session_id: Optional[str] = None) -> Dict:
+        """Save chat interaction to MongoDB chat_history collection"""
+        try:
+            if self.chat_history_collection is None:
+                return {"success": False, "error": "Chat history collection not available"}
+            
+            # Create chat history entry
+            chat_entry = {
+                "session_id": session_id or str(uuid.uuid4()),
+                "user_message": user_message,
+                "assistant_response": assistant_response,
+                "timestamp": datetime.utcnow(),
+                "message_length": len(user_message),
+                "response_length": len(assistant_response)
+            }
+            
+            # Insert into database
+            result = self.chat_history_collection.insert_one(chat_entry)
+            
+            if result.inserted_id:
+                logger.info(f"Chat history saved successfully with ID: {result.inserted_id}")
+                return {
+                    "success": True,
+                    "message": "Chat history saved successfully",
+                    "entry_id": str(result.inserted_id)
+                }
+            else:
+                return {"success": False, "error": "Failed to save chat history"}
+                
+        except Exception as e:
+            logger.error(f"Error saving chat history: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def get_chat_history_stats(self) -> Dict:
+        """Get statistics from chat_history collection"""
+        try:
+            if self.chat_history_collection is None:
+                return {"success": False, "error": "Chat history collection not available"}
+            
+            # Get total chat interactions
+            total_chats = self.chat_history_collection.count_documents({})
+            
+            # Get chats today
+            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_chats = self.chat_history_collection.count_documents({
+                "timestamp": {"$gte": today_start}
+            })
+            
+            # Get chats this week
+            week_start = today_start - timedelta(days=7)
+            week_chats = self.chat_history_collection.count_documents({
+                "timestamp": {"$gte": week_start}
+            })
+            
+            return {
+                "success": True,
+                "total_chat_interactions": total_chats,
+                "chats_today": today_chats,
+                "chats_this_week": week_chats,
+                "collection_available": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting chat history stats: {e}")
+            return {"success": False, "error": str(e)}
+
     async def get_response(self, message: str, chat_history: List[Dict[str, str]]) -> Dict:
         """Get response from the multi-agent system"""
         try:
@@ -1586,6 +1660,34 @@ async def database_connection_test() -> Dict[str, Any]:
                         results["demo_queue_insert_test"] = "❌ Insert failed"
                 else:
                     results["demo_queue_collection"] = "❌ Not initialized"
+                
+                # Test chat_history collection
+                if chatbot_service.chat_history_collection:
+                    chat_history_count = chatbot_service.chat_history_collection.count_documents({})
+                    results["chat_history_count"] = chat_history_count
+                    
+                    # Test a simple insert and delete for chat history
+                    test_chat_doc = {
+                        "test": True,
+                        "user_message": "test message",
+                        "assistant_response": "test response",
+                        "timestamp": datetime.utcnow(),
+                        "session_id": "test-chat-connection"
+                    }
+                    insert_result = chatbot_service.chat_history_collection.insert_one(test_chat_doc)
+                    if insert_result.inserted_id:
+                        results["chat_history_insert_test"] = "✅ Insert successful"
+                        
+                        # Clean up test document
+                        delete_result = chatbot_service.chat_history_collection.delete_one({"_id": insert_result.inserted_id})
+                        if delete_result.deleted_count == 1:
+                            results["chat_history_delete_test"] = "✅ Delete successful"
+                        else:
+                            results["chat_history_delete_test"] = "⚠️ Delete failed"
+                    else:
+                        results["chat_history_insert_test"] = "❌ Insert failed"
+                else:
+                    results["chat_history_collection"] = "❌ Not initialized"
                     
             else:
                 results["mongodb_connection"] = "❌ Client not initialized"
@@ -1778,6 +1880,16 @@ async def get_demo_done_statistics() -> Dict[str, Any]:
         logger.error(f"Error getting demo done stats: {e}")
         return {"success": False, "error": str(e)}
 
+@app.get("/api/v1/staff/chat/history-stats")
+async def get_chat_history_statistics() -> Dict[str, Any]:
+    """Get statistics from chat history (staff only)"""
+    try:
+        result = await chatbot_service.get_chat_history_stats()
+        return result
+    except Exception as e:
+        logger.error(f"Error getting chat history stats: {e}")
+        return {"success": False, "error": str(e)}
+
 @app.post("/api/v1/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest) -> ChatResponse:
     """
@@ -1792,6 +1904,16 @@ async def chat_endpoint(request: ChatRequest) -> ChatResponse:
             response=result["response"],
             chat_history=result["chat_history"]
         )
+        
+        # Save chat history to database
+        try:
+            await chatbot_service.save_chat_history(
+                user_message=request.message,
+                assistant_response=result["response"]
+            )
+        except Exception as save_error:
+            # Log the error but don't fail the chat response
+            logger.error(f"Failed to save chat history: {save_error}")
         
         logger.info(f"Multi-agent chat response sent successfully")
         return response
