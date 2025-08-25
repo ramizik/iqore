@@ -42,8 +42,7 @@ body {
 
 .main-logo {
     max-height: 95px;
-    width: auto;
-    max-width: 600px;
+    width: 600px;
     object-fit: contain;
     filter: drop-shadow(0 4px 16px rgba(139, 69, 255, 0.4));
 }
@@ -493,9 +492,9 @@ body {
     }
     
     .main-logo {
-        max-height: 80px;
+        max-height: 85px;
+        width: 500px;
         max-width: calc(100vw - 80px);
-        width: auto;
         object-fit: contain;
     }
 }
@@ -510,8 +509,8 @@ body {
     
     .main-logo {
         max-height: 70px;
+        width: 350px;
         max-width: calc(100vw - 30px);
-        width: auto;
         object-fit: contain;
     }
     
@@ -1103,8 +1102,8 @@ body.keyboard-open .main-layout {
     
     .main-logo {
         max-height: 60px;
+        width: 280px;
         max-width: calc(100vw - 20px);
-        width: auto;
         object-fit: contain;
     }
     
