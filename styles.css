@@ -42,8 +42,9 @@ body {
 
 .main-logo {
     max-height: 95px;
-    width: 600px;
-    object-fit: cover;
+    width: auto;
+    max-width: 600px;
+    object-fit: contain;
     filter: drop-shadow(0 4px 16px rgba(139, 69, 255, 0.4));
 }
 
@@ -484,15 +485,34 @@ body {
     background: rgba(80, 40, 150, 0.6);
 }
 
+/* Medium screens - tablets and small laptops */
+@media (max-width: 1024px) and (min-width: 769px) {
+    .top-logo-section {
+        width: calc(100vw - 40px);
+        padding: 0 20px;
+    }
+    
+    .main-logo {
+        max-height: 80px;
+        max-width: calc(100vw - 80px);
+        width: auto;
+        object-fit: contain;
+    }
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .top-logo-section {
         width: calc(100vw - 20px);
         top: 10px;
+        padding: 0 15px;
     }
     
     .main-logo {
-        max-height: 60px;
+        max-height: 70px;
+        max-width: calc(100vw - 30px);
+        width: auto;
+        object-fit: contain;
     }
     
     .main-layout {
@@ -1082,8 +1102,10 @@ body.keyboard-open .main-layout {
     }
     
     .main-logo {
-        max-height: 50px;
+        max-height: 60px;
+        max-width: calc(100vw - 20px);
         width: auto;
+        object-fit: contain;
     }
     
     .main-layout {
