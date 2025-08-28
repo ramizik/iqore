@@ -610,39 +610,24 @@ function toggleQueueWidget() {
 }
 
 async function requestDemo() {
-    // Try direct signup first, fall back to conversation if no user info
+    // Use only UI form for demo signup
     try {
-        // Check if we have user info from previous conversations
-        const userInfo = extractUserInfoFromHistory();
+        // Show quick form signup
+        const quickSignup = await tryQuickSignupForm();
         
-        if (userInfo.name && userInfo.email) {
-            // Direct API call to add to queue
-            await addToQueueDirectly(userInfo);
-        } else {
-            // Try quick form signup first, then fall back to conversation
-            const quickSignup = await tryQuickSignupForm();
+        if (quickSignup.success) {
+            await addToQueueDirectly(quickSignup.userInfo);
             
-            if (quickSignup.success) {
-                await addToQueueDirectly(quickSignup.userInfo);
-            } else {
-                // Fall back to conversational signup
-    const demoMessage = "I'd like to join the demo queue";
-                await sendMessage(demoMessage);
-                // Queue message UI removed - no longer needed
-            }
+            // Show queue widget if not already visible and start monitoring
+            showQueueWidget();
+            startQueueMonitoring();
         }
-    
-        // Show queue widget if not already visible and start monitoring
-    showQueueWidget();
-        startQueueMonitoring();
+        // If user cancels form, do nothing - they can try again
         
     } catch (error) {
         console.error('Error requesting demo:', error);
-        // Queue message UI removed - show error in chat instead
-        
-        // Fall back to conversational method
-        const demoMessage = "I'd like to join the demo queue";
-        await sendMessage(demoMessage);
+        // Show user-friendly error message
+        alert('Sorry, there was an error processing your demo request. Please try again or visit our booth directly.');
     }
 }
 
@@ -678,10 +663,11 @@ async function addToQueueDirectly(userInfo) {
             // Auto-refresh queue display to show updated status
             await refreshQueueStatus();
             
-            // Add success message to chat
+            // Show confirmation message in chat
             addSystemMessageToChat(
                 `🎉 Great! You've been added to our demo queue.\n` +
-                `📊 Your Position: #${result.queue_position}\n`
+                `📊 Your Position: #${result.queue_position}\n\n` +
+                `💬 While you wait, feel free to ask me anything you're curious about! I can tell you what to expect from your demo experience, explain our breakthrough quantum technologies like iQD optimization, or discuss how our quantum-classical hybrid approach delivers superior performance. What would you like to explore?`
             );
             
         } else {
@@ -695,94 +681,6 @@ async function addToQueueDirectly(userInfo) {
     }
 }
 
-function extractUserInfoFromHistory() {
-    // Extract user info from recent chat history
-    const userInfo = { name: null, email: null, company: null, phone: null };
-    
-    // Look through recent chat history for user information
-    const recentMessages = chatHistory.slice(-10); // Last 10 exchanges
-    
-    for (const exchange of recentMessages) {
-        if (exchange.user && exchange.assistant) {
-            const userMsg = exchange.user.toLowerCase();
-            const aiMsg = exchange.assistant.toLowerCase();
-            
-            // Extract email
-            const emailMatch = exchange.user.match(/\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/);
-            if (emailMatch) {
-                userInfo.email = emailMatch[0];
-            }
-            
-            // Extract name (look for patterns like "my name is", "I'm", etc.)
-            const namePatterns = [
-                /my name is ([a-zA-Z\s]{2,50})/i,
-                /i'm ([a-zA-Z\s]{2,50})/i,
-                /name's ([a-zA-Z\s]{2,50})/i,
-                /i am ([a-zA-Z\s]{2,50})/i,
-                /call me ([a-zA-Z\s]{2,50})/i
-            ];
-            
-            for (const pattern of namePatterns) {
-                const nameMatch = exchange.user.match(pattern);
-                if (nameMatch) {
-                    userInfo.name = nameMatch[1].trim();
-                    break;
-                }
-            }
-            
-            // If no pattern found, check if user message might be just a name
-            if (!userInfo.name && userMsg.length > 2 && userMsg.length < 50 && 
-                !userMsg.includes('@') && /^[a-zA-Z\s]+$/.test(exchange.user.trim())) {
-                const words = exchange.user.trim().split(/\s+/);
-                if (words.length >= 1 && words.length <= 4) {
-                    userInfo.name = exchange.user.trim();
-                }
-            }
-            
-            // Extract phone number
-            const phonePatterns = [
-                /my phone is ([+]?[\d\s\-\(\)]{10,})/i,
-                /phone number is ([+]?[\d\s\-\(\)]{10,})/i,
-                /call me at ([+]?[\d\s\-\(\)]{10,})/i,
-                /number is ([+]?[\d\s\-\(\)]{10,})/i
-            ];
-            
-            for (const pattern of phonePatterns) {
-                const phoneMatch = exchange.user.match(pattern);
-                if (phoneMatch) {
-                    userInfo.phone = phoneMatch[1].trim();
-                    break;
-                }
-            }
-            
-            // If no phone pattern found, check if message looks like a standalone phone number
-            if (!userInfo.phone) {
-                const digitsOnly = exchange.user.replace(/\D/g, '');
-                if (digitsOnly.length >= 10 && exchange.user.length <= 20) {
-                    userInfo.phone = exchange.user.trim();
-                }
-            }
-            
-            // Extract company
-            const companyPatterns = [
-                /work at ([a-zA-Z0-9\s&.-]{2,100})/i,
-                /work for ([a-zA-Z0-9\s&.-]{2,100})/i,
-                /from ([a-zA-Z0-9\s&.-]{2,100})/i,
-                /company is ([a-zA-Z0-9\s&.-]{2,100})/i
-            ];
-            
-            for (const pattern of companyPatterns) {
-                const companyMatch = exchange.user.match(pattern);
-                if (companyMatch) {
-                    userInfo.company = companyMatch[1].trim();
-                    break;
-                }
-            }
-        }
-    }
-    
-    return userInfo;
-}
 
 function addSystemMessageToChat(message) {
     // Add a system message to the chat interface
@@ -953,15 +851,7 @@ function monitorChatForDemo(userMessage, aiResponse) {
         }, 1000);
     }
     
-    // Check for session ID in AI response
-    const sessionIdMatch = aiResponse.match(/session[_\s]*id[:\s]*([a-f0-9\-]{36})/i);
-    if (sessionIdMatch) {
-        userSessionId = sessionIdMatch[1];
-        console.log('User session ID detected:', userSessionId);
-        
-        // Start personalized status updates
-        startPersonalizedStatusUpdates();
-    }
+    // Session ID and personalized updates are now handled via UI signup only
 }
 
 function startPersonalizedStatusUpdates() {
@@ -1015,6 +905,7 @@ window.toggleCalendlyWidget = toggleCalendlyWidget; // Add this line
 window.requestDemo = requestDemo;
 window.handleKeyDown = handleKeyDown; 
 window.handleManualRefresh = handleManualRefresh;
+window.extendTime = extendTime;
 
 // Note: refreshQueueStatus is kept for internal monitoring but not exposed globally 
 
@@ -1073,7 +964,7 @@ function updateTimerDisplay() {
 function showOneMinuteWarning() {
     // Add warning message to chat
     addMessage(
-        "⏰ Your session will end in 1 minute. We'd love to continue our conversation at our booth! Please visit us for more detailed discussions about iQore's quantum computing solutions.",
+        "⏰ Your session will end in 1 minute. You can extend your time or start a new chat using the options at the top of this page. Otherwise, we'd love to continue our conversation at our booth! Thank you for chatting with the iQore assistant.",
         'ai'
     );
     
@@ -1151,6 +1042,36 @@ function restartSession() {
     }
     
     console.log('Session restarted by user');
+}
+
+// Function to extend session time without clearing chat
+function extendTime() {
+    // Clear existing timer
+    if (sessionTimer) {
+        clearInterval(sessionTimer);
+        sessionTimer = null;
+    }
+    
+    // Reset timer variables
+    sessionTimeLeft = 600; // 10 minutes
+    oneMinuteWarningShown = false;
+    
+    // Remove warning style if present
+    const timerElement = document.getElementById('sessionTimer');
+    if (timerElement) {
+        timerElement.classList.remove('warning');
+    }
+    
+    // Start the timer again
+    startSessionTimer();
+    
+    // Add a brief message to indicate time was extended
+    addMessage(
+        "⏰ Your session time has been extended. Continue exploring iQore's quantum computing solutions!",
+        'system'
+    );
+    
+    console.log('Session time extended by user');
 }
 
 // Add Calendly widget functions
