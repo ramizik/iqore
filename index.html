@@ -13,25 +13,11 @@
         <img src="iqore-logo.png" alt="iQore Logo" class="main-logo">
     </div>
 
-    <!-- Session Timer -->
-    <div class="session-timer" id="sessionTimer" style="display: none;">
-        <div class="timer-icon">⏱️</div>
-        <div class="timer-text" id="timerText">10:00</div>
-        <div class="timer-buttons">
-            <button class="timer-extend-btn" onclick="extendTime()" title="Extend time by 10 minutes">
-                Extend time
-            </button>
-            <button class="timer-refresh-btn" onclick="restartSession()" title="Start new chat session">
-                New chat
-            </button>
-        </div>
-    </div>
-
     <div class="main-layout">
         <div class="chat-container">
         <!-- Chat Messages Area -->
-        <main class="chat-main" role="main" aria-label="Chat conversation">
-            <div class="messages-container" id="messagesContainer" aria-live="polite" aria-label="Chat messages">
+        <main class="chat-main">
+            <div class="messages-container" id="messagesContainer">
                 <!-- Messages will be dynamically added here -->
             </div>
         </main>
@@ -47,14 +33,9 @@
                     id="messageInput" 
                     placeholder="Type your message here..."
                     onkeydown="handleKeyDown(event)"
-                    aria-label="Type your message to chat with iQore AI"
-                    autocomplete="off"
-                    autocapitalize="sentences"
-                    autocorrect="on"
                 >
-                <button class="send-button" id="sendButton" onclick="sendMessage()" aria-label="Send message">
-                    <span class="sr-only">Send message</span>
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <button class="send-button" id="sendButton" onclick="sendMessage()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
@@ -64,10 +45,9 @@
     </div>
 
     <!-- Live Demo Queue Card - Appears to the right of chatbot when demo keywords detected -->
-    <div class="widget-column">
-        <div class="demo-queue-card" id="queueStatusWidget" style="display: none;">
+    <div class="demo-queue-card" id="queueStatusWidget" style="display: none;">
         <div class="queue-card-header">
-            <h3>Join Demo Queue Now</h3>
+            <h3>Live Demo Queue</h3>
             <button class="queue-close-btn" id="queueToggleBtn" onclick="toggleQueueWidget()">×</button>
         </div>
         <div class="queue-card-content" id="queueStatusContent">
@@ -76,7 +56,7 @@
                 <span class="count-label">People Waiting</span>
             </div>
             <div class="queue-info">
-                <p><strong>Note:</strong> Live demo sessions are available at select times and depend on availability. Please check with our representatives to see if a demo queue is open right now. Wait times range from 5 to 20 min.</p>
+                <p><strong>Wait Time:</strong> 5-10 min</p>
             </div>
             <div class="queue-actions">
                 <button class="join-queue-btn" id="joinQueueBtn" onclick="requestDemo()">
@@ -88,28 +68,8 @@
             </div>
         </div>
     </div>
-        
-        <!-- Calendly Widget - Appears under demo queue when demo keywords detected -->
-        <div class="calendly-widget-container" id="calendlyWidget" style="display: none;">
-            <div class="calendly-card-header">
-                <h3>Schedule Demo Later</h3>
-                <button class="calendly-close-btn" onclick="toggleCalendlyWidget()">×</button>
-            </div>
-            <div class="calendly-content">
-                <!-- Calendly inline widget begin -->
-                <div class="calendly-inline-widget" 
-                     data-url="https://calendly.com/r_hasanli/new-meeting?hide_event_type_details=1&hide_gdpr_banner=1" 
-                     style="min-width:320px;height:450px;">
-                </div>
-                <!-- Calendly inline widget end -->
-            </div>
-        </div>
-    </div>
-</div>
 </div>
 
-
-<script type="text/javascript" src="https://assets.calendly.com/assets/external/widget.js" async></script>
 <script src="script.js"></script>
 </body>
 </html>

@@ -9,11 +9,6 @@ let isLoading = false;
 let currentSuggestions = [];
 let hasUserSentMessage = false; // Track if user has sent their first message
 
-// Session timer variables
-let sessionTimer = null;
-let sessionTimeLeft = 600; // 10 minutes in seconds
-let oneMinuteWarningShown = false;
-
 // DOM elements
 const messagesContainer = document.getElementById('messagesContainer');
 const messageInput = document.getElementById('messageInput');
@@ -23,19 +18,10 @@ const suggestionsContainer = document.getElementById('suggestionsContainer');
 // Initialize the chat interface
 document.addEventListener('DOMContentLoaded', function() {
     console.log('iQore Chatbot Frontend initialized');
-    // Only focus on desktop or when widgets are not visible
-    if (window.innerWidth > 768) {
-        messageInput.focus();
-    }
+    messageInput.focus();
     showInitialSuggestions();
     // Fetch initial welcome message from backend
     fetchWelcomeMessage();
-    
-    // Initialize mobile enhancements
-    setupMobileInputHandling();
-    addTouchFeedback();
-    addSwipeSupport();
-    initializeVirtualKeyboardHandling();
 });
 
 // Comprehensive list of questions about iQore
@@ -163,8 +149,6 @@ function updateSuggestions(suggestions) {
         const suggestionBubble = document.createElement('button');
         suggestionBubble.className = 'suggestion-bubble';
         suggestionBubble.textContent = suggestion;
-        suggestionBubble.setAttribute('aria-label', `Ask: ${suggestion}`);
-        suggestionBubble.setAttribute('type', 'button');
         suggestionBubble.onclick = () => handleSuggestionClick(suggestion);
         
         // Add slight delay for animation
@@ -183,9 +167,6 @@ function handleSuggestionClick(suggestion) {
     
     // Mark that user has sent their first message
     hasUserSentMessage = true;
-    
-    // Start session timer on first message
-    startSessionTimer();
     
     sendMessage();
     
@@ -215,9 +196,6 @@ async function sendMessage() {
     
     // Mark that user has sent their first message
     hasUserSentMessage = true;
-    
-    // Start session timer on first message
-    startSessionTimer();
     
     setLoading(true);
     
@@ -288,10 +266,7 @@ async function sendMessage() {
         suggestionsContainer.style.display = 'none';
     } finally {
         setLoading(false);
-        // Only focus on input if user is not scrolling or interacting with widgets
-        if (window.innerWidth > 768 || !queueWidgetVisible) {
-            messageInput.focus();
-        }
+        messageInput.focus();
     }
 }
 
@@ -315,12 +290,7 @@ function addMessage(text, sender) {
     // Add message text
     const messageText = document.createElement('p');
     messageText.textContent = text;
-    messageText.setAttribute('aria-label', `${sender === 'ai' ? 'AI' : 'User'} message: ${text}`);
     messageBubble.appendChild(messageText);
-    
-    // Add ARIA attributes for accessibility
-    messageBubble.setAttribute('role', 'article');
-    messageBubble.setAttribute('aria-label', `${sender === 'ai' ? 'AI' : 'User'} message`);
     
     // Assemble message group
     messageGroup.appendChild(messageAvatar);
@@ -435,10 +405,10 @@ function scrollToBottom() {
     }, 100);
 }
 
-// Handle window resize (will be replaced by throttled version in mobile enhancements)
-// window.addEventListener('resize', function() {
-//     scrollToBottom();
-// });
+// Handle window resize
+window.addEventListener('resize', function() {
+    scrollToBottom();
+});
 
 // Handle connection errors gracefully
 window.addEventListener('online', function() {
@@ -457,7 +427,6 @@ const DEMO_REQUEST_ENDPOINT = `${API_BASE_URL}/api/v1/demo/request`;
 
 // Queue widget state
 let queueWidgetVisible = false;
-let calendlyWidgetVisible = false; // Add this line
 let queueRefreshInterval = null;
 let userSessionId = null;
 
@@ -577,11 +546,6 @@ function showQueueWidget() {
         widget.classList.add('show');
         queueWidgetVisible = true;
         console.log('Queue widget is now visible');
-        
-        // Also show Calendly widget
-        setTimeout(() => {
-            showCalendlyWidget();
-        }, 300); // Small delay for smoother animation
     }
 }
 
@@ -592,9 +556,6 @@ function hideQueueWidget() {
         widget.classList.remove('show');
         queueWidgetVisible = false;
     }
-    
-    // Also hide Calendly widget
-    hideCalendlyWidget();
     
     // Also stop monitoring when widget is hidden
     stopQueueMonitoring();
@@ -610,24 +571,39 @@ function toggleQueueWidget() {
 }
 
 async function requestDemo() {
-    // Use only UI form for demo signup
+    // Try direct signup first, fall back to conversation if no user info
     try {
-        // Show quick form signup
-        const quickSignup = await tryQuickSignupForm();
+        // Check if we have user info from previous conversations
+        const userInfo = extractUserInfoFromHistory();
         
-        if (quickSignup.success) {
-            await addToQueueDirectly(quickSignup.userInfo);
+        if (userInfo.name && userInfo.email) {
+            // Direct API call to add to queue
+            await addToQueueDirectly(userInfo);
+        } else {
+            // Try quick form signup first, then fall back to conversation
+            const quickSignup = await tryQuickSignupForm();
             
-            // Show queue widget if not already visible and start monitoring
-            showQueueWidget();
-            startQueueMonitoring();
+            if (quickSignup.success) {
+                await addToQueueDirectly(quickSignup.userInfo);
+            } else {
+                // Fall back to conversational signup
+    const demoMessage = "I'd like to join the demo queue";
+                await sendMessage(demoMessage);
+                // Queue message UI removed - no longer needed
+            }
         }
-        // If user cancels form, do nothing - they can try again
+    
+        // Show queue widget if not already visible and start monitoring
+    showQueueWidget();
+        startQueueMonitoring();
         
     } catch (error) {
         console.error('Error requesting demo:', error);
-        // Show user-friendly error message
-        alert('Sorry, there was an error processing your demo request. Please try again or visit our booth directly.');
+        // Queue message UI removed - show error in chat instead
+        
+        // Fall back to conversational method
+        const demoMessage = "I'd like to join the demo queue";
+        await sendMessage(demoMessage);
     }
 }
 
@@ -663,11 +639,12 @@ async function addToQueueDirectly(userInfo) {
             // Auto-refresh queue display to show updated status
             await refreshQueueStatus();
             
-            // Show confirmation message in chat
+            // Add success message to chat
             addSystemMessageToChat(
-                `🎉 Great! You've been added to our demo queue.\n` +
-                `📊 Your Position: #${result.queue_position}\n\n` +
-                `💬 While you wait, feel free to ask me anything you're curious about! I can tell you what to expect from your demo experience, explain our breakthrough quantum technologies like iQD optimization, or discuss how our quantum-classical hybrid approach delivers superior performance. What would you like to explore?`
+                `🎉 Great! You've been added to our demo queue.\n\n` +
+                `📊 Your Position: #${result.queue_position}\n` +
+                `⏱️ Estimated Wait: ${result.estimated_wait_time} minutes\n` +
+                `🆔 Session ID: ${result.session_id}`
             );
             
         } else {
@@ -681,6 +658,94 @@ async function addToQueueDirectly(userInfo) {
     }
 }
 
+function extractUserInfoFromHistory() {
+    // Extract user info from recent chat history
+    const userInfo = { name: null, email: null, company: null, phone: null };
+    
+    // Look through recent chat history for user information
+    const recentMessages = chatHistory.slice(-10); // Last 10 exchanges
+    
+    for (const exchange of recentMessages) {
+        if (exchange.user && exchange.assistant) {
+            const userMsg = exchange.user.toLowerCase();
+            const aiMsg = exchange.assistant.toLowerCase();
+            
+            // Extract email
+            const emailMatch = exchange.user.match(/\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/);
+            if (emailMatch) {
+                userInfo.email = emailMatch[0];
+            }
+            
+            // Extract name (look for patterns like "my name is", "I'm", etc.)
+            const namePatterns = [
+                /my name is ([a-zA-Z\s]{2,50})/i,
+                /i'm ([a-zA-Z\s]{2,50})/i,
+                /name's ([a-zA-Z\s]{2,50})/i,
+                /i am ([a-zA-Z\s]{2,50})/i,
+                /call me ([a-zA-Z\s]{2,50})/i
+            ];
+            
+            for (const pattern of namePatterns) {
+                const nameMatch = exchange.user.match(pattern);
+                if (nameMatch) {
+                    userInfo.name = nameMatch[1].trim();
+                    break;
+                }
+            }
+            
+            // If no pattern found, check if user message might be just a name
+            if (!userInfo.name && userMsg.length > 2 && userMsg.length < 50 && 
+                !userMsg.includes('@') && /^[a-zA-Z\s]+$/.test(exchange.user.trim())) {
+                const words = exchange.user.trim().split(/\s+/);
+                if (words.length >= 1 && words.length <= 4) {
+                    userInfo.name = exchange.user.trim();
+                }
+            }
+            
+            // Extract phone number
+            const phonePatterns = [
+                /my phone is ([+]?[\d\s\-\(\)]{10,})/i,
+                /phone number is ([+]?[\d\s\-\(\)]{10,})/i,
+                /call me at ([+]?[\d\s\-\(\)]{10,})/i,
+                /number is ([+]?[\d\s\-\(\)]{10,})/i
+            ];
+            
+            for (const pattern of phonePatterns) {
+                const phoneMatch = exchange.user.match(pattern);
+                if (phoneMatch) {
+                    userInfo.phone = phoneMatch[1].trim();
+                    break;
+                }
+            }
+            
+            // If no phone pattern found, check if message looks like a standalone phone number
+            if (!userInfo.phone) {
+                const digitsOnly = exchange.user.replace(/\D/g, '');
+                if (digitsOnly.length >= 10 && exchange.user.length <= 20) {
+                    userInfo.phone = exchange.user.trim();
+                }
+            }
+            
+            // Extract company
+            const companyPatterns = [
+                /work at ([a-zA-Z0-9\s&.-]{2,100})/i,
+                /work for ([a-zA-Z0-9\s&.-]{2,100})/i,
+                /from ([a-zA-Z0-9\s&.-]{2,100})/i,
+                /company is ([a-zA-Z0-9\s&.-]{2,100})/i
+            ];
+            
+            for (const pattern of companyPatterns) {
+                const companyMatch = exchange.user.match(pattern);
+                if (companyMatch) {
+                    userInfo.company = companyMatch[1].trim();
+                    break;
+                }
+            }
+        }
+    }
+    
+    return userInfo;
+}
 
 function addSystemMessageToChat(message) {
     // Add a system message to the chat interface
@@ -851,7 +916,15 @@ function monitorChatForDemo(userMessage, aiResponse) {
         }, 1000);
     }
     
-    // Session ID and personalized updates are now handled via UI signup only
+    // Check for session ID in AI response
+    const sessionIdMatch = aiResponse.match(/session[_\s]*id[:\s]*([a-f0-9\-]{36})/i);
+    if (sessionIdMatch) {
+        userSessionId = sessionIdMatch[1];
+        console.log('User session ID detected:', userSessionId);
+        
+        // Start personalized status updates
+        startPersonalizedStatusUpdates();
+    }
 }
 
 function startPersonalizedStatusUpdates() {
@@ -901,470 +974,8 @@ window.addEventListener('beforeunload', function() {
 
 // Export new functions for global access
 window.toggleQueueWidget = toggleQueueWidget;
-window.toggleCalendlyWidget = toggleCalendlyWidget; // Add this line
 window.requestDemo = requestDemo;
 window.handleKeyDown = handleKeyDown; 
 window.handleManualRefresh = handleManualRefresh;
-window.extendTime = extendTime;
 
 // Note: refreshQueueStatus is kept for internal monitoring but not exposed globally 
-
-// Session Timer Functions
-function startSessionTimer() {
-    // Don't start if timer is already running
-    if (sessionTimer) {
-        return;
-    }
-    
-    // Show timer element
-    const timerElement = document.getElementById('sessionTimer');
-    if (timerElement) {
-        timerElement.style.display = 'flex';
-    }
-    
-    // Update timer display immediately
-    updateTimerDisplay();
-    
-    // Start countdown
-    sessionTimer = setInterval(() => {
-        sessionTimeLeft--;
-        updateTimerDisplay();
-        
-        // Show 1-minute warning
-        if (sessionTimeLeft === 60 && !oneMinuteWarningShown) {
-            showOneMinuteWarning();
-            oneMinuteWarningShown = true;
-        }
-        
-        // End session when timer reaches 0
-        if (sessionTimeLeft <= 0) {
-            endSession();
-        }
-    }, 1000);
-    
-    console.log('Session timer started - 10 minutes');
-}
-
-function updateTimerDisplay() {
-    const timerText = document.getElementById('timerText');
-    const timerElement = document.getElementById('sessionTimer');
-    
-    if (timerText) {
-        const minutes = Math.floor(sessionTimeLeft / 60);
-        const seconds = sessionTimeLeft % 60;
-        timerText.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        
-        // Add warning style when 1 minute or less
-        if (sessionTimeLeft <= 60 && timerElement) {
-            timerElement.classList.add('warning');
-        }
-    }
-}
-
-function showOneMinuteWarning() {
-    // Add warning message to chat
-    addMessage(
-        "⏰ Your session will end in 1 minute. You can extend your time or start a new chat using the options at the top of this page. Otherwise, we'd love to continue our conversation at our booth! Thank you for chatting with the iQore assistant.",
-        'ai'
-    );
-    
-    console.log('1-minute warning shown to user');
-}
-
-function endSession() {
-    // Clear the timer
-    if (sessionTimer) {
-        clearInterval(sessionTimer);
-        sessionTimer = null;
-    }
-    
-    // Show final message
-    addMessage(
-        "🕐 Your session has ended. Thank you for your interest in iQore! Please visit our booth for continued assistance and live demonstrations of our quantum computing technology.",
-        'ai'
-    );
-    
-    console.log('Session ended - refreshing page in 3 seconds');
-    
-    // Refresh page after 3 seconds to allow user to read the message
-    setTimeout(() => {
-        window.location.reload();
-    }, 3000);
-}
-
-// Cleanup timer on page unload
-window.addEventListener('beforeunload', function() {
-    if (sessionTimer) {
-        clearInterval(sessionTimer);
-    }
-});
-
-// Function to restart the session
-function restartSession() {
-    // Clear existing timer
-    if (sessionTimer) {
-        clearInterval(sessionTimer);
-        sessionTimer = null;
-    }
-    
-    // Reset timer variables
-    sessionTimeLeft = 600; // 10 minutes
-    oneMinuteWarningShown = false;
-    
-    // Reset user message flag
-    hasUserSentMessage = false;
-    
-    // Hide timer
-    const timerElement = document.getElementById('sessionTimer');
-    if (timerElement) {
-        timerElement.style.display = 'none';
-        timerElement.classList.remove('warning');
-    }
-    
-    // Clear chat history
-    chatHistory = [];
-    
-    // Clear messages container
-    const messagesContainer = document.getElementById('messagesContainer');
-    if (messagesContainer) {
-        messagesContainer.innerHTML = '';
-    }
-    
-    // Show initial suggestions again
-    showInitialSuggestions();
-    
-    // Fetch welcome message again
-    fetchWelcomeMessage();
-    
-    // Focus on input only if not on mobile or widgets not visible
-    if (window.innerWidth > 768 || !queueWidgetVisible) {
-        messageInput.focus();
-    }
-    
-    console.log('Session restarted by user');
-}
-
-// Function to extend session time without clearing chat
-function extendTime() {
-    // Clear existing timer
-    if (sessionTimer) {
-        clearInterval(sessionTimer);
-        sessionTimer = null;
-    }
-    
-    // Reset timer variables
-    sessionTimeLeft = 600; // 10 minutes
-    oneMinuteWarningShown = false;
-    
-    // Remove warning style if present
-    const timerElement = document.getElementById('sessionTimer');
-    if (timerElement) {
-        timerElement.classList.remove('warning');
-    }
-    
-    // Start the timer again
-    startSessionTimer();
-    
-    // Add a brief message to indicate time was extended
-    addMessage(
-        "⏰ Your session time has been extended. Continue exploring iQore's quantum computing solutions!",
-        'system'
-    );
-    
-    console.log('Session time extended by user');
-}
-
-// Add Calendly widget functions
-function showCalendlyWidget() {
-    const widget = document.getElementById('calendlyWidget');
-    if (widget && !calendlyWidgetVisible) {
-        widget.style.display = 'block';
-        widget.classList.add('show');
-        calendlyWidgetVisible = true;
-        console.log('Calendly widget is now visible');
-    }
-}
-
-function hideCalendlyWidget() {
-    const widget = document.getElementById('calendlyWidget');
-    if (widget) {
-        widget.style.display = 'none';
-        widget.classList.remove('show');
-        calendlyWidgetVisible = false;
-    }
-}
-
-function toggleCalendlyWidget() {
-    const widget = document.getElementById('calendlyWidget');
-    
-    // Close/hide the Calendly widget completely
-    if (widget) {
-        hideCalendlyWidget();
-    }
-}
-
-// Update existing showQueueWidget function
-function showQueueWidget() {
-    const widget = document.getElementById('queueStatusWidget');
-    if (widget && !queueWidgetVisible) {
-        widget.style.display = 'block';
-        widget.classList.add('show');
-        queueWidgetVisible = true;
-        console.log('Queue widget is now visible');
-        
-        // Add widgets-visible class to chat container on mobile
-        if (window.innerWidth <= 768) {
-            const chatContainer = document.querySelector('.chat-container');
-            if (chatContainer) {
-                chatContainer.classList.add('widgets-visible');
-            }
-            
-            // Scroll to widgets after a short delay to show them
-            setTimeout(() => {
-                scrollToWidgets();
-            }, 800);
-        }
-        
-        // Also show Calendly widget with a small delay for smoother animation
-        setTimeout(() => {
-            showCalendlyWidget();
-        }, 300);
-    }
-}
-
-// Update existing hideQueueWidget function
-function hideQueueWidget() {
-    const widget = document.getElementById('queueStatusWidget');
-    if (widget) {
-        widget.style.display = 'none';
-        widget.classList.remove('show');
-        queueWidgetVisible = false;
-    }
-    
-    // Remove widgets-visible class from chat container on mobile
-    if (window.innerWidth <= 768) {
-        const chatContainer = document.querySelector('.chat-container');
-        if (chatContainer) {
-            chatContainer.classList.remove('widgets-visible');
-        }
-    }
-    
-    // Also hide Calendly widget
-    hideCalendlyWidget();
-    
-    // Also stop monitoring when widget is hidden
-    stopQueueMonitoring();
-}
-
-// Update existing toggleQueueWidget function
-function toggleQueueWidget() {
-    const widget = document.getElementById('queueStatusWidget');
-    
-    // Close/hide the queue card completely
-    if (widget) {
-        hideQueueWidget();
-    }
-}
-
-// Mobile Enhancement Functions
-let initialViewportHeight = window.innerHeight;
-
-function setupMobileInputHandling() {
-    // Prevent zoom on input focus (iOS Safari)
-    messageInput.addEventListener('focus', function() {
-        // Temporarily increase font size to prevent zoom
-        if (window.innerWidth <= 768) {
-            messageInput.style.fontSize = '16px';
-        }
-    });
-    
-    // Handle virtual keyboard appearance
-    window.addEventListener('resize', throttle(function() {
-        // Only scroll to input when keyboard appears if widgets are not visible
-        // This prevents interrupting user's widget interaction
-        if (document.activeElement === messageInput && !queueWidgetVisible) {
-            setTimeout(() => {
-                messageInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 300);
-        }
-        // Only auto-scroll chat to bottom if user is actively in chat area
-        if (!queueWidgetVisible) {
-            scrollToBottom();
-        }
-    }, 100));
-}
-
-function addTouchFeedback() {
-    // Add haptic feedback for touch interactions (if available)
-    function addTouchListeners(element) {
-        element.addEventListener('touchstart', function() {
-            if (navigator.vibrate) {
-                navigator.vibrate(10); // Subtle haptic feedback
-            }
-            // Add visual feedback
-            element.style.transform = 'scale(0.95)';
-        });
-        
-        element.addEventListener('touchend', function() {
-            // Reset visual feedback
-            setTimeout(() => {
-                element.style.transform = '';
-            }, 100);
-        });
-    }
-    
-    // Add to existing buttons
-    const buttons = document.querySelectorAll('button, .suggestion-bubble');
-    buttons.forEach(addTouchListeners);
-    
-    // Observer for dynamically added suggestion bubbles
-    const observer = new MutationObserver(function(mutations) {
-        mutations.forEach(function(mutation) {
-            mutation.addedNodes.forEach(function(node) {
-                if (node.nodeType === Node.ELEMENT_NODE) {
-                    if (node.classList && node.classList.contains('suggestion-bubble')) {
-                        addTouchListeners(node);
-                    }
-                    // Also check child elements
-                    const newButtons = node.querySelectorAll && node.querySelectorAll('button, .suggestion-bubble');
-                    if (newButtons) {
-                        newButtons.forEach(addTouchListeners);
-                    }
-                }
-            });
-        });
-    });
-    
-    // Start observing the suggestions container for changes
-    const suggestionsContainer = document.getElementById('suggestionsContainer');
-    if (suggestionsContainer) {
-        observer.observe(suggestionsContainer, { childList: true, subtree: true });
-    }
-}
-
-function initializeVirtualKeyboardHandling() {
-    // Handle viewport height changes for virtual keyboard
-    function handleVirtualKeyboard() {
-        const currentHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-        const heightDifference = initialViewportHeight - currentHeight;
-        
-        // If keyboard is likely open (height reduced significantly)
-        if (heightDifference > 150) {
-            document.body.classList.add('keyboard-open');
-            
-            // On mobile, adjust the chat container to work with scrollable layout
-            if (window.innerWidth <= 768) {
-                const chatContainer = document.querySelector('.chat-container');
-                if (chatContainer) {
-                    // Reduce chat height when keyboard is open to maintain usability
-                    chatContainer.style.height = `${Math.min(currentHeight * 0.4, 300)}px`;
-                    chatContainer.style.maxHeight = `${Math.min(currentHeight * 0.4, 300)}px`;
-                }
-            }
-        } else {
-            document.body.classList.remove('keyboard-open');
-            
-            // Reset heights on mobile
-            if (window.innerWidth <= 768) {
-                const chatContainer = document.querySelector('.chat-container');
-                if (chatContainer) {
-                    chatContainer.style.height = '';
-                    chatContainer.style.maxHeight = '';
-                }
-            }
-        }
-    }
-
-    // Listen for viewport changes (virtual keyboard)
-    if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', handleVirtualKeyboard);
-    }
-    
-    // Fallback for older browsers
-    window.addEventListener('resize', throttle(handleVirtualKeyboard, 100));
-}
-
-function addSwipeSupport() {
-    let startX, startY, distX, distY;
-    const threshold = 100; // minimum distance for swipe
-    
-    messagesContainer.addEventListener('touchstart', function(e) {
-        const touch = e.touches[0];
-        startX = touch.clientX;
-        startY = touch.clientY;
-    });
-    
-    messagesContainer.addEventListener('touchmove', function(e) {
-        // Prevent default to avoid scrolling issues on horizontal swipes
-        const touch = e.touches[0];
-        const currentDistX = Math.abs(touch.clientX - startX);
-        const currentDistY = Math.abs(touch.clientY - startY);
-        
-        if (currentDistX > currentDistY && currentDistX > 10) {
-            e.preventDefault();
-        }
-    });
-    
-    messagesContainer.addEventListener('touchend', function(e) {
-        const touch = e.changedTouches[0];
-        distX = touch.clientX - startX;
-        distY = touch.clientY - startY;
-        
-        // Check if it's a horizontal swipe
-        if (Math.abs(distX) > Math.abs(distY) && Math.abs(distX) > threshold) {
-            if (distX > 0) {
-                // Swipe right - could show additional options
-                console.log('Swiped right - future feature');
-            } else {
-                // Swipe left - could hide widgets or show menu
-                console.log('Swiped left - future feature');
-            }
-        }
-    });
-}
-
-// Throttle function for better performance
-function throttle(func, delay) {
-    let timeoutId;
-    let lastExecTime = 0;
-    return function (...args) {
-        const currentTime = Date.now();
-        
-        if (currentTime - lastExecTime > delay) {
-            func.apply(this, args);
-            lastExecTime = currentTime;
-        } else {
-            clearTimeout(timeoutId);
-            timeoutId = setTimeout(() => {
-                func.apply(this, args);
-                lastExecTime = Date.now();
-            }, delay - (currentTime - lastExecTime));
-        }
-    };
-}
-
-// Scroll to widgets on mobile to help users find them
-function scrollToWidgets() {
-    if (window.innerWidth <= 768) {
-        const widgetColumn = document.querySelector('.widget-column');
-        if (widgetColumn) {
-            widgetColumn.scrollIntoView({ 
-                behavior: 'smooth', 
-                block: 'start',
-                inline: 'nearest'
-            });
-        }
-    }
-}
-
-// Handle window resize to manage widgets-visible class
-window.addEventListener('resize', throttle(function() {
-    const chatContainer = document.querySelector('.chat-container');
-    if (chatContainer && queueWidgetVisible) {
-        if (window.innerWidth <= 768) {
-            chatContainer.classList.add('widgets-visible');
-        } else {
-            chatContainer.classList.remove('widgets-visible');
-        }
-    }
-}, 100));
