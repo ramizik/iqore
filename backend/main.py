@@ -110,6 +110,13 @@ class DemoQueueEntry(BaseModel):
     timestamp: datetime
     queue_position: Optional[int] = None
     notes: Optional[str] = None
+    estimated_wait_time: Optional[int] = None
+
+    @validator('estimated_wait_time', pre=True)
+    def convert_float_to_int(cls, v):
+        if v is not None and isinstance(v, float):
+            return int(v)
+        return v
 
 class QueueStatusResponse(BaseModel):
     success: bool
